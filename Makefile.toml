@@ -12,8 +12,16 @@ script = [
     "cat a.s",
 ]
 
+[tasks.testml]
+dependencies = [
+    "run"
+]
+script = [
+    "./target/debug/ruscaml ./test/test.ml"
+]
+
 [tasks.run]
 dependencies = [
-    "compile",
+    "build",
     "assemble",
 ]
