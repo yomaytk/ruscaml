@@ -1,0 +1,19 @@
+[tasks.build]
+command = "cargo"
+args = ["build"]
+
+[tasks.compile]
+command = "cargo"
+args = ["run"]
+
+[tasks.assemble]
+script = [
+    "gcc -static a.s -o a.out",
+    "cat a.s",
+]
+
+[tasks.run]
+dependencies = [
+    "compile",
+    "assemble",
+]
