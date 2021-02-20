@@ -1,20 +1,22 @@
 extern crate ruscaml;
 
-use std::env;
-use std::fs;
-use std::io::{BufWriter, Write};
-
+use ruscaml::*;
 use ruscaml::lexer::*;
 use ruscaml::parser::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
+use std::io::{BufWriter, Write};
+// use std::env;
+use std::fs;
+
+fn main() {
     
-    let content = fs::read_to_string(&args[args.len()-1])?;
+    // let args: Vec<String> = env::args().collect();
     
-    let tokens = tokenize(content);
+    println!("{}", *PROGRAM);
     
-    // println!("{:?}", tokens);
+    let tokens = tokenize();
+    
+    println!("{:?}", tokens);
 
     let ast = toplevel(tokens);
 
@@ -31,6 +33,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     f.write(b"\tmov %rbp, %rsp\n").unwrap();
     f.write(b"\tpop %rbp\n").unwrap();
     f.write(b"\tret\n").unwrap();
-
-    Ok(())
 }

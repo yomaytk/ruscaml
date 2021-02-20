@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TokenType {
     Semisemi,
@@ -5,6 +7,21 @@ pub enum TokenType {
     Plus,
     Mult,
     Lt,
+    Var,
+    If,
+    Then,
+    Else,
+}
+
+impl From<&str> for TokenType {
+    fn from(s: &str) -> Self {
+        match s {
+            "if" => TokenType::If,
+            "then" => TokenType::Then,
+            "else" => TokenType::Else,
+            _ => TokenType::Var
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -12,6 +29,16 @@ pub struct Token {
     pub tokentype: TokenType,
     pub num: i32,
 }
+
+impl Token {
+    pub fn new(tokentype: TokenType, num: i32) -> Self {
+        Self {
+            tokentype,
+            num,
+        }
+    }
+}
+
 
 pub struct TokenVec {
     pub tokenvec: Vec<Token>,
@@ -42,57 +69,89 @@ impl TokenVec {
     }
 }
 
-fn reserved_token(s: &str, pos: &mut usize) -> Option<TokenType> {
-    if &s[0..1] == "+" {
-        *pos += 1;
-        Some(TokenType::Plus)
-    } else if &s[0..1] == "*" {
-        *pos += 1;
-        Some(TokenType::Mult)
-    } else if &s[0..1] == "<" {
-        *pos += 1;
-        Some(TokenType::Lt)
-    } else if &s[0..2] == ";;" {
+fn signal(pos: &mut usize) -> Option<Token> {
+    if &(*PROGRAM)[*pos..*pos+2] == ";;" {
         *pos += 2;
-        Some(TokenType::Semisemi)
+        Some(Token::new(TokenType::Semisemi, -1))
+    } else if &(*PROGRAM)[*pos..*pos+1] == "+" {
+        *pos += 1;
+        Some(Token::new(TokenType::Plus, -1))
+    } else if &(*PROGRAM)[*pos..*pos+1] == "*" {
+        *pos += 1;
+        Some(Token::new(TokenType::Mult, -1))
+    } else if &(*PROGRAM)[*pos..*pos+1] == "<" {
+        *pos += 1;
+        Some(Token::new(TokenType::Lt, -1))
     } else {
         None
     }
 }
 
-pub fn tokenize(program: String) -> Vec<Token> {
+fn identify(s: &Vec<char>, pos: &mut usize) -> Option<Token> {
+    let start = *pos;
+    // first character should be alphabet
+    if s[*pos].is_ascii_alphabetic() {
+        *pos += 1;
+    } else {
+        return None;
+    }
+    while s[*pos].is_ascii_alphabetic() || s[*pos].is_ascii_digit() { *pos += 1; }
+    if start < *pos {
+        Some(Token::new(TokenType::from(&(*PROGRAM)[start..*pos]), -1))
+    } else {
+        None
+    }
+}
+
+fn number(s :&Vec<char>, pos: &mut usize) -> Option<Token> {
+    let start = *pos;
+    let mut num = 0;
+    while s[*pos].is_ascii_digit() { 
+        num = num * 10 + (s[*pos] as i32 - 48);
+        *pos += 1; 
+    }
+    if start < *pos {
+        Some(Token::new(TokenType::ILit, num))
+    } else {
+        None
+    }
+}
+
+pub fn tokenize() -> Vec<Token> {
+    
     let mut tokens = vec![];
     let mut pos: usize = 0;
-    while pos < program.len()-1 {
-        // reservec token type
-        if let Some(tokentype) = reserved_token(&program[pos..], &mut pos) {
-            tokens.push(
-                Token {
-                    tokentype,
-                    num: 0,
-                }
-            );
+    let pgstr = (*PROGRAM).chars().collect::<Vec<char>>();
+
+    while pos < pgstr.len()-1 {
+        
+        // identifier
+        if let Some(token) = identify(&pgstr, &mut pos) {
+            tokens.push(token);
             continue;
         }
-        // not reserved
-        let nchar = &program[pos..pos+1];
-        match nchar {
-            "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
-                tokens.push(
-                    Token {
-                        tokentype: TokenType::ILit,
-                        num: (&nchar).parse().unwrap()
-                    }
-                );
-                pos += 1;
-            }
-            " " => {
-                pos += 1;
-            }
-            _ => {
-                panic!("tokenize error.")
-            }
+
+        let nchar = pgstr[pos];
+        
+        // space
+        if nchar.is_whitespace() {
+            pos += 1;
+            continue;
         }
+        
+        // ILit
+        if let Some(token) = number(&pgstr, &mut pos) {
+            tokens.push(token);
+            continue;
+        }
+
+        // signal
+        if let Some(token) = signal(&mut pos) {
+            tokens.push(token);
+            continue;
+        }
+
+        panic!("tokenize error.");
     }
     return tokens;
 }
