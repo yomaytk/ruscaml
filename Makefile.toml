@@ -9,7 +9,6 @@ args = ["run"]
 [tasks.assemble]
 script = [
     "gcc -static a.s -o a.out",
-    "cat a.s",
 ]
 
 [tasks.testml]
@@ -17,7 +16,15 @@ dependencies = [
     "run"
 ]
 script = [
-    "./target/debug/ruscaml ./test/test.ml"
+    "./target/debug/ruscaml ./tests/test.ml"
+]
+
+[tasks.unit_test]
+dependencies = [
+    "run"
+]
+script = [
+    "./target/debug/ruscaml ./tests/onetest.ml"
 ]
 
 [tasks.run]

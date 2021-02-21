@@ -7,10 +7,17 @@ pub enum TokenType {
     Plus,
     Mult,
     Lt,
-    Var,
+    Arrow,
+    Assign,
+    Id,
     If,
     Then,
     Else,
+    Fun,
+    Let,
+    In,
+    Rec,
+    Loop,
 }
 
 impl From<&str> for TokenType {
@@ -19,39 +26,46 @@ impl From<&str> for TokenType {
             "if" => TokenType::If,
             "then" => TokenType::Then,
             "else" => TokenType::Else,
-            _ => TokenType::Var
+            "fun" => TokenType::Fun,
+            "let" => TokenType::Let,
+            "in" => TokenType::In,
+            "rec" => TokenType::Rec,
+            "loop" => TokenType::Loop,
+            _ => TokenType::Id,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub tokentype: TokenType,
     pub num: i32,
+    pub id: Option<String>,
 }
 
 impl Token {
-    pub fn new(tokentype: TokenType, num: i32) -> Self {
+    pub fn new(tokentype: TokenType, num: i32, id: Option<String>) -> Self {
         Self {
             tokentype,
             num,
+            id
         }
     }
 }
 
 
-pub struct TokenVec {
-    pub tokenvec: Vec<Token>,
+pub struct TokenSet {
+    pub tokens: Vec<Token>,
     pub pos: usize,
 }
 
-impl TokenVec {
+impl TokenSet {
     pub fn assert_ttype(&mut self, ttype: TokenType) {
-        assert_eq!(self.tokenvec[self.pos].tokentype, ttype);
+        assert_eq!(self.tokens[self.pos].tokentype, ttype);
         self.pos += 1;
     }
     pub fn consume_ttype(&mut self, ttype: TokenType) -> bool {
-        if ttype == self.tokenvec[self.pos].tokentype {
+        if ttype == self.tokens[self.pos].tokentype {
             self.pos += 1;
             true
         } else {
@@ -59,29 +73,38 @@ impl TokenVec {
         }
     }
     pub fn curtype(&self) -> TokenType {
-        self.tokenvec[self.pos].tokentype
+        self.tokens[self.pos].tokentype
     }
     pub fn curnum(&self) -> i32 {
-        self.tokenvec[self.pos].num
+        self.tokens[self.pos].num
     }
-    pub fn eof(&self) {
-        assert_eq!(self.pos+1, self.tokenvec.len());
+    pub fn curid(&self) -> Option<Id> {
+        self.tokens[self.pos].id.clone()
+    }
+    pub fn eof(&self) -> bool {
+        self.pos+1 == self.tokens.len()
     }
 }
 
 fn signal(pos: &mut usize) -> Option<Token> {
     if &(*PROGRAM)[*pos..*pos+2] == ";;" {
         *pos += 2;
-        Some(Token::new(TokenType::Semisemi, -1))
+        Some(Token::new(TokenType::Semisemi, -1, None))
+    } else if &(*PROGRAM)[*pos..*pos+2] == "->" {
+        *pos += 2;
+        Some(Token::new(TokenType::Arrow, -1, None))
     } else if &(*PROGRAM)[*pos..*pos+1] == "+" {
         *pos += 1;
-        Some(Token::new(TokenType::Plus, -1))
+        Some(Token::new(TokenType::Plus, -1, None))
     } else if &(*PROGRAM)[*pos..*pos+1] == "*" {
         *pos += 1;
-        Some(Token::new(TokenType::Mult, -1))
+        Some(Token::new(TokenType::Mult, -1, None))
     } else if &(*PROGRAM)[*pos..*pos+1] == "<" {
         *pos += 1;
-        Some(Token::new(TokenType::Lt, -1))
+        Some(Token::new(TokenType::Lt, -1, None))
+    } else if  &(*PROGRAM)[*pos..*pos+1] == "=" {
+        *pos += 1;
+        Some(Token::new(TokenType::Assign, -1 , None))
     } else {
         None
     }
@@ -95,9 +118,9 @@ fn identify(s: &Vec<char>, pos: &mut usize) -> Option<Token> {
     } else {
         return None;
     }
-    while s[*pos].is_ascii_alphabetic() || s[*pos].is_ascii_digit() { *pos += 1; }
+    while s[*pos].is_ascii_alphabetic() || s[*pos].is_ascii_digit() || s[*pos] == '_' || s[*pos] == '\''{ *pos += 1; }
     if start < *pos {
-        Some(Token::new(TokenType::from(&(*PROGRAM)[start..*pos]), -1))
+        Some(Token::new(TokenType::from(&(*PROGRAM)[start..*pos]), -1, Some(String::from(&(*PROGRAM)[start..*pos]))))
     } else {
         None
     }
@@ -111,13 +134,13 @@ fn number(s :&Vec<char>, pos: &mut usize) -> Option<Token> {
         *pos += 1; 
     }
     if start < *pos {
-        Some(Token::new(TokenType::ILit, num))
+        Some(Token::new(TokenType::ILit, num, None))
     } else {
         None
     }
 }
 
-pub fn tokenize() -> Vec<Token> {
+pub fn tokenize() -> TokenSet {
     
     let mut tokens = vec![];
     let mut pos: usize = 0;
@@ -153,5 +176,9 @@ pub fn tokenize() -> Vec<Token> {
 
         panic!("tokenize error.");
     }
-    return tokens;
+    let tokenset = TokenSet {
+        tokens: tokens,
+        pos: 0
+    };
+    return tokenset;
 }
