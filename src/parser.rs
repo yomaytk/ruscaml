@@ -25,7 +25,7 @@ fn identify(tokenset: &mut TokenSet) -> Id {
         tokenset.pos += 1;
         Id::from(id)
     } else {
-        panic!("parser identify error.");
+        panic!("We will never get to this process.")
     }
 }
 
