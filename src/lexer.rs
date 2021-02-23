@@ -9,6 +9,10 @@ pub enum TokenType {
     Lt,
     Arrow,
     Assign,
+    Lbrac,
+    Rbrac,
+    Comma,
+    Dot,
     Id,
     If,
     Then,
@@ -18,6 +22,9 @@ pub enum TokenType {
     In,
     Rec,
     Loop,
+    Recur,
+    True,
+    False,
 }
 
 impl From<&str> for TokenType {
@@ -31,6 +38,9 @@ impl From<&str> for TokenType {
             "in" => TokenType::In,
             "rec" => TokenType::Rec,
             "loop" => TokenType::Loop,
+            "recur" => TokenType::Recur,
+            "true" => TokenType::True,
+            "false" => TokenType::False,
             _ => TokenType::Id,
         }
     }
@@ -61,8 +71,9 @@ pub struct TokenSet {
 
 impl TokenSet {
     pub fn assert_ttype(&mut self, ttype: TokenType) {
-        assert_eq!(self.tokens[self.pos].tokentype, ttype);
-        self.pos += 1;
+        if !self.consume_ttype(ttype) {
+            panic!("parse error. \ncurrent token: {:?}\ntoken position: {}", self.tokens[self.pos], self.pos)
+        }
     }
     pub fn consume_ttype(&mut self, ttype: TokenType) -> bool {
         if ttype == self.tokens[self.pos].tokentype {
@@ -105,6 +116,19 @@ fn signal(pos: &mut usize) -> Option<Token> {
     } else if  &(*PROGRAM)[*pos..*pos+1] == "=" {
         *pos += 1;
         Some(Token::new(TokenType::Assign, -1 , None))
+    } else if &(*PROGRAM)[*pos..*pos+1] == "(" {
+        *pos += 1;
+        Some(Token::new(TokenType::Lbrac, -1, None))
+    } else if &(*PROGRAM)[*pos..*pos+1] == ")" {
+        *pos += 1;
+        Some(Token::new(TokenType::Rbrac, -1 , None))
+    }
+    else if &(*PROGRAM)[*pos..*pos+1] == "," {
+        *pos += 1;
+        Some(Token::new(TokenType::Comma, -1 , None))
+    } else if &(*PROGRAM)[*pos..*pos+1] == "." {
+        *pos += 1;
+        Some(Token::new(TokenType::Dot, -1 , None))
     } else {
         None
     }

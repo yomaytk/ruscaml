@@ -3,7 +3,9 @@ use super::lexer::*;
 
 #[derive(Clone, Debug)]
 pub enum Ast {
-    IntV(i32),
+    Nonaexpr,
+    ILit(i32),
+    BLit(bool),
     Binop(TokenType, Box<Ast>, Box<Ast>),
     If(Box<Ast>, Box<Ast>, Box<Ast>),
     Fun(Id, Box<Ast>),
@@ -11,6 +13,10 @@ pub enum Ast {
     Let(Id, Box<Ast>, Box<Ast>),
     Rec(Id, Box<Ast>, Box<Ast>),
     Loop(Id, Box<Ast>, Box<Ast>),
+    Recur(Box<Ast>),
+    App(Box<Ast>, Box<Ast>),
+    Tuple(Box<Ast>, Box<Ast>),
+    Proj(Box<Ast>, Box<Ast>),
 }
 
 
@@ -23,26 +29,65 @@ fn identify(tokenset: &mut TokenSet) -> Id {
     }
 }
 
+fn proj(tokenset: &mut TokenSet, mut ast: Ast) -> Ast {
+    while tokenset.consume_ttype(TokenType::Dot) {
+        ast = Ast::Proj(Box::new(ast), Box::new(aexpr(tokenset)));
+    }
+    ast
+}
+
 fn aexpr(tokenset: &mut TokenSet) -> Ast {
     match tokenset.curtype() {
         TokenType::ILit => {
             let num = tokenset.curnum();
             tokenset.pos += 1;
-            Ast::IntV(num)
+            Ast::ILit(num)
         }
         TokenType::Id => {
             let var = tokenset.curid().unwrap();
             tokenset.pos += 1;
-            Ast::Var(var)
+            proj(tokenset, Ast::Var(var))
+        }
+        TokenType::True => {
+            tokenset.pos += 1;
+            Ast::BLit(true)
+        }
+        TokenType::False => {
+            tokenset.pos += 1;
+            Ast::BLit(false)
+        }
+        TokenType::Lbrac => {
+            tokenset.pos += 1;
+            let mut ast = expr(tokenset);
+            if tokenset.consume_ttype(TokenType::Comma) {
+                ast = Ast::Tuple(Box::new(ast), Box::new(expr(tokenset)));
+            }
+            tokenset.assert_ttype(TokenType::Rbrac);
+            proj(tokenset, ast)
         }
         _ => {
-            panic!("aexpr error.")
+            Ast::Nonaexpr
         }
     }
 }
 
-fn mexpr(tokenset: &mut TokenSet) -> Ast {
+fn appexpr(tokenset: &mut TokenSet) -> Ast {
+    if tokenset.consume_ttype(TokenType::Recur) {
+        return Ast::Recur(Box::new(aexpr(tokenset)));
+    }
     let mut ast = aexpr(tokenset);
+    loop {
+        let ast1 = aexpr(tokenset);
+        if let Ast::Nonaexpr = ast1 {
+            break;
+        }
+        ast = Ast::App(Box::new(ast), Box::new(ast1));
+    }
+    ast
+}
+
+fn mexpr(tokenset: &mut TokenSet) -> Ast {
+    let mut ast = appexpr(tokenset);
     while tokenset.consume_ttype(TokenType::Mult) {
         ast = Ast::Binop(TokenType::Mult, Box::new(ast), Box::new(aexpr(tokenset)));
     }
