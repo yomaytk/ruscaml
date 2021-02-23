@@ -10,12 +10,3 @@ let a = true in let b = false in f a b;;
 (1+2*3);;
 let a = (1 + 3 *4) in a;;
 let a = (0, (1, (2, (3, 4)))) in a.2.2.2.1;;
-let a = 1 in
-let b = 43 in 
-a+b;;
-let 3 = 5 in 4;;
-let a = 1 in
-let b = 2 in
-let c = 3 in 
-let 3 = 4 in 
-5;;

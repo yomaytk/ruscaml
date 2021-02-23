@@ -7,19 +7,16 @@ use std::io::{ Write, BufWriter};
 use std::process::Command;
 
 #[test]
-fn unittest() -> Result<(), Box<dyn std::error::Error>> {
+fn test() -> Result<(), Box<dyn std::error::Error>> {
     
-    let mut programset = fs::read_to_string("./tests/test.ml").expect("failed to read test.ml.");
-    programset = programset.replace(";;\n", ";;");
-    let mut programs: Vec<&str> = programset.split(";;").collect();
-    programs.pop().unwrap();
+    let programset = fs::read_to_string("./tests/test.ml").expect("failed to read test.ml.");
+    let programs: Vec<&str> = programset.split('\n').collect();
 
     for program in programs {
         let mut f = BufWriter::new(fs::File::create("./tests/onetest.ml").unwrap());
         f.write(program.as_bytes()).unwrap();
-        f.write(";;".as_bytes()).unwrap();
         f.flush()?;
-        print!("{} => \n", program);
+        println!("[ {} ] => ", program);
         let output = Command::new("./target/debug/ruscaml")
             .arg("./tests/onetest.ml")
             .output()
