@@ -15,7 +15,7 @@ fn main() {
     
     // println!("{:?}", tokenset.tokens);
 
-    let ast = toplevel(tokenset);
+    let ast = parse(tokenset);
 
     println!("{:?}", ast);
 

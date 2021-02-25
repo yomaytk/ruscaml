@@ -42,3 +42,7 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
     }
     println!("^");
 }
+
+pub fn message_error(message: &str) {
+    println!("{}", message);
+}

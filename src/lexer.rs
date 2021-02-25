@@ -75,6 +75,7 @@ impl TokenSet {
     pub fn assert_ttype(&mut self, ttype: TokenType) {
         if !self.consume_ttype(ttype) {
             compile_error(&self, "lexer tokenset error");
+            std::process::exit(1);
         }
     }
     pub fn consume_ttype(&mut self, ttype: TokenType) -> bool {

@@ -171,8 +171,51 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
     ast
 }
 
-pub fn toplevel(mut tokenset: TokenSet) -> Ast {
+fn recur_check(ast: Ast, endpos: bool) -> Ast {
+    match ast {
+        Ast::Nonaexpr | Ast::ILit(_) | Ast::BLit(_) | Ast::Var(_) => {
+            ast
+        }
+        Ast::Binop(ttype, ast1, ast2) => {
+            Ast::Binop(ttype, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::If(ast1, ast2, ast3) => {
+            Ast::If(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)), Box::new(recur_check(*ast3, endpos)))
+        }
+        Ast::Fun(id, ast1) => {
+            Ast::Fun(id, Box::new(recur_check(*ast1, endpos)))
+        }
+        Ast::Let(id, ast1, ast2) => {
+            Ast::Let(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::Rec(id, ast1, ast2) => {
+            Ast::Rec(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::Loop(id, ast1, ast2) => {
+            Ast::Loop(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, true)))
+        }
+        Ast::App(ast1, ast2) => {
+            Ast::App(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::Tuple(ast1, ast2) => {
+            Ast::Tuple(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::Proj(ast1, ast2) => {
+            Ast::Proj(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        }
+        Ast::Recur(ast1) => {
+            if !endpos {
+                message_error("<recur <exp>> should be at end position.");
+                std::process::exit(1);
+            }
+            Ast::Recur(Box::new(recur_check(*ast1, endpos)))
+        }
+    }
+}
+
+pub fn parse(mut tokenset: TokenSet) -> Ast {
     let ast = expr(&mut tokenset);
     tokenset.assert_ttype(TokenType::Semisemi);
+    let ast = recur_check(ast, false);
     ast
 }

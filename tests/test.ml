@@ -21,4 +21,8 @@ let 3 = 4 in
 5;;
 (* comment *)
 (* (* comment *) *)
-1;; 
+1;;
+let a = 3 in loop b = 3 in recur b;;
+let rec f = fun x -> x+1 in loop d = 3 in recur (f 5);;
+if true then loop f = 4 in recur 4 else 5;;
+let a = 4 in recur 5;;
