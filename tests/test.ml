@@ -19,3 +19,6 @@ let b = 2 in
 let c = 3 in 
 let 3 = 4 in 
 5;;
+(* comment *)
+(* (* comment *) *)
+1;; 

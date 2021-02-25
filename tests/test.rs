@@ -19,7 +19,7 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
         f.write(program.as_bytes()).unwrap();
         f.write(";;".as_bytes()).unwrap();
         f.flush()?;
-        print!("{} => \n", program);
+        print!("{};; => \n", program);
         let output = Command::new("./target/debug/ruscaml")
             .arg("./tests/onetest.ml")
             .output()
@@ -46,6 +46,5 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
         .arg("./tests/onetest.ml")
         .output()
         .expect("failed to delete onetest.ml");
-
     Ok(())
 }

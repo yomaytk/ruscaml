@@ -181,6 +181,27 @@ pub fn tokenize() -> TokenSet {
 
     while pos < pgstr.len()-1 {
         
+        // comment
+        if &(*PROGRAM)[pos..pos+2] == "(*" {
+            let mut count = 1;
+            pos += 2;
+            loop {
+                if pos+1 == pgstr.len() {
+                    panic!("Comment should be closed.");
+                } else if &(*PROGRAM)[pos..pos+2] == "(*" {
+                    count += 1;
+                } else if &(*PROGRAM)[pos..pos+2] == "*)" {
+                    pos += 2;
+                    count -= 1;
+                    if count == 0 {
+                        break;
+                    }
+                }
+                pos += 1;
+            }
+            continue;
+        }
+
         // identifier
         if let Some(token) = identify(&pgstr, &mut pos, line, head) {
             tokens.push(token);

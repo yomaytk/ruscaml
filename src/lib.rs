@@ -30,7 +30,7 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
             break;
         }
         if tokenset.tokens[tokenset.pos + i].position.0 == true {
-            end = tokenset.tokens[tokenset.pos + i- 1].position.2;
+            end = tokenset.tokens[tokenset.pos + i].position.2 - 1;
             break;
         }
     }
