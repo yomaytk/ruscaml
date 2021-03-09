@@ -11,14 +11,13 @@ pub enum Ast {
     Fun(Id, Box<Ast>),
     Var(Id),
     Let(Id, Box<Ast>, Box<Ast>),
-    Rec(Id, Box<Ast>, Box<Ast>),
+    Rec(Id, Id, Box<Ast>, Box<Ast>),
     Loop(Id, Box<Ast>, Box<Ast>),
     Recur(Box<Ast>),
     App(Box<Ast>, Box<Ast>),
     Tuple(Box<Ast>, Box<Ast>),
-    Proj(Box<Ast>, Box<Ast>),
+    Proj(Box<Ast>, i32),
 }
-
 
 fn identify(tokenset: &mut TokenSet) -> Id {
     if let Some(id) = tokenset.curid() {
@@ -31,7 +30,13 @@ fn identify(tokenset: &mut TokenSet) -> Id {
 
 fn proj(tokenset: &mut TokenSet, mut ast: Ast) -> Ast {
     while tokenset.consume_ttype(TokenType::Dot) {
-        ast = Ast::Proj(Box::new(ast), Box::new(aexpr(tokenset)));
+        let num = aexpr(tokenset);
+        if let Ast::ILit(v) = num {
+            ast = Ast::Proj(Box::new(ast), v);
+        } else {
+            compile_error(tokenset, "proj type error.");
+            std::process::exit(1);
+        }
     }
     ast
 }
@@ -138,9 +143,9 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
                     let id = identify(tokenset);
                     tokenset.assert_ttype(TokenType::Assign);
                     let funast = expr(tokenset);
-                    if let Ast::Fun(_, _) = funast {
+                    if let Ast::Fun(funid, body) = funast {
                         tokenset.assert_ttype(TokenType::In);
-                        ast = Ast::Rec(id, Box::new(funast), Box::new(expr(tokenset)));
+                        ast = Ast::Rec(id, funid, Box::new(*body), Box::new(expr(tokenset)));
                     } else {
                         panic!("should type fun. {:?}", funast);
                     }
@@ -188,8 +193,8 @@ fn recur_check(ast: Ast, endpos: bool) -> Ast {
         Ast::Let(id, ast1, ast2) => {
             Ast::Let(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
         }
-        Ast::Rec(id, ast1, ast2) => {
-            Ast::Rec(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        Ast::Rec(id, funid, ast1, ast2) => {
+            Ast::Rec(id, funid, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
         }
         Ast::Loop(id, ast1, ast2) => {
             Ast::Loop(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, true)))
@@ -200,8 +205,8 @@ fn recur_check(ast: Ast, endpos: bool) -> Ast {
         Ast::Tuple(ast1, ast2) => {
             Ast::Tuple(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
         }
-        Ast::Proj(ast1, ast2) => {
-            Ast::Proj(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
+        Ast::Proj(ast1, v) => {
+            Ast::Proj(Box::new(recur_check(*ast1, endpos)), v)
         }
         Ast::Recur(ast1) => {
             if !endpos {

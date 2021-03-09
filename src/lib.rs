@@ -4,6 +4,7 @@ use std::fs;
 
 pub mod lexer;
 pub mod parser;
+pub mod normal;
 
 use lexer::*;
 
@@ -44,5 +45,5 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
 }
 
 pub fn message_error(message: &str) {
-    println!("{}", message);
+    println!("Error: {}", message);
 }
