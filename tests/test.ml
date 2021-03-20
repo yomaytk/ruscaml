@@ -1,5 +1,6 @@
 1 + 3 * 4 + 5;;
 if 1 then 4 else 4;;
+(x + 1) * 2 + (3 + 1);;
 fun a -> a+5;;
 let a = 1 in a;;
 let a = 1 in let b = 3 in a+b*3;;
