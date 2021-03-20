@@ -14,16 +14,18 @@ let a = (0, (1, (2, (3, 4)))) in a.2.2.2.1;;
 let a = 1 in
 let b = 43 in 
 a+b;;
+let a = 3 in loop b = 3 in recur b;;
+let rec f = fun x -> x+1 in loop d = 3 in recur (f 5);;
+if true then loop f = 4 in recur 4 else 5;;
+(fun x -> fun y -> x + y) 2 3;;
+
+(* recur check violataion *)
+let a = 4 in recur 5;;
+
+(* Compile Error Syntax *)
 let 3 = 5 in 4;;
 let a = 1 in
 let b = 2 in
 let c = 3 in 
 let 3 = 4 in 
 5;;
-(* comment *)
-(* (* comment *) *)
-1;;
-let a = 3 in loop b = 3 in recur b;;
-let rec f = fun x -> x+1 in loop d = 3 in recur (f 5);;
-if true then loop f = 4 in recur 4 else 5;;
-let a = 4 in recur 5;;

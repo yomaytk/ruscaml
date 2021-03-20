@@ -6,7 +6,6 @@ use std::sync::Mutex;
 // use std::fmt;
 
 pub static FRESH_COUNT: Lazy<Mutex<i32>> = Lazy::new(|| Mutex::new(0));
-// pub static ASS_FUNCTIONS: Lazy<Mutex<Vec<dyn FnOnce(Cexp) -> Exp>>> = Lazy::new(|| Mutex::new(vec![]));
 
 fn get_fresh_var() -> String {
     let num = *(FRESH_COUNT).lock().unwrap();
@@ -172,19 +171,14 @@ fn ef(cexp: Cexp) -> Exp {
     Exp::Compexp(Box::new(cexp))
 }
 
-struct AsgFun {
-    pub f: Box<dyn FnOnce(Cexp) -> Exp>
-}
+struct AsgFun(Box<dyn FnOnce(Cexp) -> Exp>);
 
 impl AsgFun {
     fn new(f: Box<dyn FnOnce(Cexp) -> Exp>) -> Self {
-        Self {
-            f
-        }
+        Self(f)
     }
     fn apply(&mut self) -> Box<dyn FnOnce(Cexp) -> Exp> {
-        let f = std::mem::replace(&mut self.f, Box::new(ef));
-        f
+        std::mem::replace(&mut self.0, Box::new(ef))
     }
 }
 
