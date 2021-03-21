@@ -19,7 +19,7 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
         f.write(program.as_bytes()).unwrap();
         f.write(";;".as_bytes()).unwrap();
         f.flush()?;
-        print!("{};; => \n", program);
+        print!("{};; => \n\n", program);
         let output = Command::new("./target/debug/ruscaml")
             .arg("./tests/onetest.ml")
             .output()
@@ -40,6 +40,7 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", std::str::from_utf8(&failed_stdout).unwrap());
             std::process::exit(1);
         }
+        println!("##########################################");
     }
 
     let _ = Command::new("rm")

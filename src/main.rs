@@ -20,8 +20,7 @@ fn main() {
 
     let norm_ast = normalize(ast);
 
-    println!("{:?}", norm_ast);
-
+    norm_ast.program_display();
     // let mut f = BufWriter::new(fs::File::create("a.s").unwrap());
     
     // f.write(b".text\n").unwrap();

@@ -38,6 +38,45 @@ pub enum Cexp {
     Proj(Value, i32)
 }
 
+impl Cexp {
+    pub fn program_display(self) {
+        use Cexp::*;
+        match self {
+            Val(Value::Var(v)) => { print!("{}", v); }
+            Val(Value::Intv(v)) => { print!("{}", v); }
+            Binop(tty, val1, val2) => {
+                Val(val1).program_display();
+                print!("{}", tty.bintype_signal());
+                Val(val2).program_display();
+            }
+            App(val1, val2) => {
+                Val(val1).program_display();
+                print!(" ");
+                Val(val2).program_display();
+            }
+            If(val, exp1, exp2) => {
+                print!("if ");
+                Val(val).program_display();
+                print!(" then ");
+                exp1.program_display();
+                print!(" else ");
+                exp2.program_display();
+            }
+            Tuple(val1, val2) => {
+                print!("(");
+                Val(val1).program_display();
+                print!(", ");
+                Val(val2).program_display();
+                print!(")");
+            }
+            Proj(val, i) => {
+                Val(val).program_display();
+                print!(".{}", i);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Exp {
     Compexp(Box<Cexp>),
@@ -47,6 +86,45 @@ pub enum Exp {
     Recur(Value)
 }
 
+impl Exp {
+    pub fn program_display(self) {
+        use Exp::*;
+        match self {
+            Compexp(cexp) => {
+                cexp.program_display();
+            }
+            Let(id, cexp, exp) => {
+                print!("let {} = ", id);
+                cexp.program_display();
+                print!(" in\n");
+                exp.program_display();
+            }
+            Loop(id, cexp, exp) => {
+                print!("loop {} = ", id);
+                cexp.program_display();
+                print!(" in\n");
+                exp.program_display();
+            }
+            Letrec(id1, id2, exp1, exp2) => {
+                print!("let rec {} = fun ", id1);
+                print!("{} -> ", id2);
+                match *exp1 {
+                    Let(..) | Letrec(..) | Loop(..) => { 
+                        print!("\n");
+                    }
+                    _ => {}
+                }
+                exp1.program_display(); 
+                print!(" in\n");
+                exp2.program_display();
+            }
+            Recur(val) => {
+                Cexp::Val(val).program_display();
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Bintype {
     Plus,
@@ -54,6 +132,16 @@ pub enum Bintype {
     Lt
 }
 
+impl Bintype {
+    fn bintype_signal(self) -> char {
+        use Bintype::*;
+        match self {
+            Plus => { '+' }
+            Mult => { '*' }
+            Lt => { '<' }
+        }
+    }
+}
 fn ttype2btype(ttype: TokenType) -> Bintype {
     match ttype {
         TokenType::Plus => { Bintype::Plus }
