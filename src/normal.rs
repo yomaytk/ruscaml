@@ -28,6 +28,17 @@ pub enum Value {
     Intv(i32)
 }
 
+impl Value {
+    fn ast2value(ast: parser::Ast) -> (Option<Value>, Ast) {
+        match ast {
+            Ast::ILit(v) => { (Some(Value::Intv(v)), ast) }
+            Ast::BLit(v) => { (Some(Value::Intv(if v {1} else {0})), ast) }
+            Ast::Var(v) => { (Some(Value::Var(v.clone())), Ast::Var(v)) }
+            _ => { (None, ast) }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Cexp {
     Val(Value),
@@ -119,6 +130,7 @@ impl Exp {
                 exp2.program_display();
             }
             Recur(val) => {
+                print!("recur ");
                 Cexp::Val(val).program_display();
             }
         }
@@ -142,6 +154,7 @@ impl Bintype {
         }
     }
 }
+
 fn ttype2btype(ttype: TokenType) -> Bintype {
     match ttype {
         TokenType::Plus => { Bintype::Plus }
@@ -160,11 +173,21 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
             fs[fid].apply()(Cexp::Val(Value::Intv(if v {1} else {0})))
         }
         Ast::Binop(ttype, ast1, ast2) => {
-            match (*ast1, *ast2) {
-                (Ast::Var(id1), Ast::Var(id2)) => {
-                    fs[fid].apply()(Cexp::Binop(ttype2btype(ttype), Value::Var(id1), Value::Var(id2)))
+            let (val1, _ast1) = Value::ast2value(*ast1);
+            let (val2, _ast2) = Value::ast2value(*ast2);
+            match (val1, val2) {
+                (Some(v1), Some(v2)) => {
+                    fs[fid].apply()(Cexp::Binop(ttype2btype(ttype), v1, v2))
                 }
-                (_ast1, _ast2) => {
+                (None, Some(_)) => {
+                    let nv1 = get_fresh_var();
+                    norm_exp(Ast::Let(nv1.clone(), Box::new(_ast1), Box::new(Ast::Binop(ttype, Box::new(Ast::Var(nv1)), Box::new(_ast2)))), fid, fs)
+                }
+                (Some(_), None) => {
+                    let nv2 = get_fresh_var();
+                    norm_exp(Ast::Let(nv2.clone(), Box::new(_ast2), Box::new(Ast::Binop(ttype, Box::new(_ast1), Box::new(Ast::Var(nv2))))), fid ,fs)
+                }
+                (None, None) => {
                     let nv1 = get_fresh_var();
                     let nv2 = get_fresh_var();
                     norm_exp(Ast::Let(nv1.clone(), Box::new(_ast1), Box::new(Ast::Let(nv2.clone(), Box::new(_ast2), Box::new(Ast::Binop(ttype, Box::new(Ast::Var(nv1)), Box::new(Ast::Var(nv2))))))), fid, fs)
@@ -190,9 +213,8 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
                 Ast::BLit(v) => { Exp::Let(id, Box::new(Cexp::Val(Value::Intv(if v {1} else {0}))), Box::new(norm_exp(*ast2, fid, fs))) }
                 Ast::Var(v) => { Exp::Let(id, Box::new(Cexp::Val(Value::Var(v))), Box::new(norm_exp(*ast2, fid, fs))) }
                 _ => {
-                    let nv = get_fresh_var();
-                    let nast2 = Box::new(norm_exp(Ast::Let(id, Box::new(Ast::Var(nv.clone())), ast2), fid, fs));
-                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv), Box::new(ce), nast2)})));
+                    let nast2 = Box::new(norm_exp(*ast2, fid, fs));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(id, Box::new(ce), nast2)})));
                     norm_exp(*ast1, fs.len()-1, fs)
                 }
             }
@@ -206,9 +228,8 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
                 Ast::BLit(v) => { Exp::Loop(id, Box::new(Cexp::Val(Value::Intv(if v {1} else {0}))), Box::new(norm_exp(*ast2, fid, fs))) }
                 Ast::Var(v) => { Exp::Loop(id, Box::new(Cexp::Val(Value::Var(v))), Box::new(norm_exp(*ast2, fid, fs))) }
                 _ => {
-                    let nv = get_fresh_var();
-                    let nast2 = norm_exp(Ast::Loop(id, Box::new(Ast::Var(nv.clone())), ast2), fid, fs);
-                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Loop(duplicate_var(nv), Box::new(ce), Box::new(nast2)) })));
+                    let nast2 = norm_exp(*ast2, fid, fs);
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Loop(id, Box::new(ce), Box::new(nast2)) })));
                     norm_exp(*ast1, fs.len()-1, fs)
                 }
             }
