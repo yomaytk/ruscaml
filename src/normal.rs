@@ -208,14 +208,14 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
             fs[fid].apply()(Cexp::Val(Value::Var(id)))
         }
         Ast::Let(id, ast1, ast2) => {
-            match *ast1 {
-                Ast::ILit(v) => { Exp::Let(id, Box::new(Cexp::Val(Value::Intv(v))), Box::new(norm_exp(*ast2, fid, fs))) }
-                Ast::BLit(v) => { Exp::Let(id, Box::new(Cexp::Val(Value::Intv(if v {1} else {0}))), Box::new(norm_exp(*ast2, fid, fs))) }
-                Ast::Var(v) => { Exp::Let(id, Box::new(Cexp::Val(Value::Var(v))), Box::new(norm_exp(*ast2, fid, fs))) }
-                _ => {
+            match Value::ast2value(*ast1) {
+                (Some(val1), _) => {
+                    Exp::Let(id, Box::new(Cexp::Val(val1)), Box::new(norm_exp(*ast2, fid, fs)))
+                }
+                (None, _ast1) => {
                     let nast2 = Box::new(norm_exp(*ast2, fid, fs));
                     fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(id, Box::new(ce), nast2)})));
-                    norm_exp(*ast1, fs.len()-1, fs)
+                    norm_exp(_ast1, fs.len()-1, fs)
                 }
             }
         }
@@ -223,46 +223,88 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
             Exp::Letrec(id1, id2, Box::new(norm_exp(*ast1, 0, fs)), Box::new(norm_exp(*ast2, fid, fs)))
         }
         Ast::Loop(id, ast1, ast2) => {
-            match *ast1 {
-                Ast::ILit(v) => { Exp::Loop(id, Box::new(Cexp::Val(Value::Intv(v))), Box::new(norm_exp(*ast2, fid, fs))) }
-                Ast::BLit(v) => { Exp::Loop(id, Box::new(Cexp::Val(Value::Intv(if v {1} else {0}))), Box::new(norm_exp(*ast2, fid, fs))) }
-                Ast::Var(v) => { Exp::Loop(id, Box::new(Cexp::Val(Value::Var(v))), Box::new(norm_exp(*ast2, fid, fs))) }
-                _ => {
+            match Value::ast2value(*ast1) {
+                (Some(val1), _) => {
+                    Exp::Loop(id, Box::new(Cexp::Val(val1)), Box::new(norm_exp(*ast2, fid, fs)))
+                }
+                (None, _ast1) => {
                     let nast2 = norm_exp(*ast2, fid, fs);
                     fs.push(AsgFun::new(Box::new(|ce| { Exp::Loop(id, Box::new(ce), Box::new(nast2)) })));
-                    norm_exp(*ast1, fs.len()-1, fs)
+                    norm_exp(_ast1, fs.len()-1, fs)
                 }
             }
         }
         Ast::Recur(ast1) => {
-            match *ast1 {
-                Ast::ILit(v) => { Exp::Recur(Value::Intv(v)) }
-                Ast::BLit(v) => { Exp::Recur(Value::Intv(if v {1} else {0})) }
-                Ast::Var(v) => { Exp::Recur(Value::Var(v)) }
-                _ => {
+            match Value::ast2value(*ast1) {
+                (Some(val1), _) => {
+                    Exp::Recur(val1)
+                }
+                (None, _ast1) => {
                     let nv = get_fresh_var();
                     fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(nv.clone(), Box::new(ce), Box::new(Exp::Recur(Value::Var(nv))))})));
-                    norm_exp(*ast1, fs.len()-1, fs)
+                    norm_exp(_ast1, fs.len()-1, fs)
                 }
             }
         }
         Ast::App(ast1, ast2) => {
-            let nv1 = get_fresh_var();
-            let nv2 = get_fresh_var();
-            let ass_ins = fs[fid].apply()(Cexp::App(Value::Var(nv1.clone()), Value::Var(nv2.clone())));
-            fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv2), Box::new(ce), Box::new(ass_ins))})));
-            let nast2 = Box::new(norm_exp(*ast2, fs.len()-1, fs));
-            fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv1), Box::new(ce), nast2)})));
-            norm_exp(*ast1, fs.len()-1, fs)
+            let (val1, _ast1) = Value::ast2value(*ast1);
+            let (val2, _ast2) = Value::ast2value(*ast2);
+            match (val1, val2) {
+                (Some(v1), Some(v2)) => {
+                    fs[fid].apply()(Cexp::App(v1, v2))
+                }
+                (Some(v1), _) => {
+                    let nv2 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::App(v1, Value::Var(nv2.clone())));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(nv2, Box::new(ce), Box::new(ass_ins))})));
+                    norm_exp(_ast2, fs.len()-1, fs)
+                }
+                (_, Some(v2)) => {
+                    let nv1 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::App(Value::Var(nv1.clone()), v2));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(nv1, Box::new(ce), Box::new(ass_ins))})));
+                    norm_exp(_ast1, fs.len()-1, fs)
+                }
+                (None, None) => {
+                    let nv1 = get_fresh_var();
+                    let nv2 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::App(Value::Var(nv1.clone()), Value::Var(nv2.clone())));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv2), Box::new(ce), Box::new(ass_ins))})));
+                    let nast2 = Box::new(norm_exp(_ast2, fs.len()-1, fs));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv1), Box::new(ce), nast2)})));
+                    norm_exp(_ast1, fs.len()-1, fs)
+                }
+            }
         }
         Ast::Tuple(ast1, ast2) => {
-            let nv1 = get_fresh_var();
-            let nv2 = get_fresh_var();
-            let ass_ins = fs[fid].apply()(Cexp::Tuple(Value::Var(nv1.clone()), Value::Var(nv2.clone())));
-            fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv2), Box::new(ce), Box::new(ass_ins))})));
-            let nast2 = Box::new(norm_exp(*ast2, fs.len()-1, fs));
-            fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv1), Box::new(ce), nast2)})));
-            norm_exp(*ast1, fs.len()-1, fs)
+            let (val1, _ast1) = Value::ast2value(*ast1);
+            let (val2, _ast2) = Value::ast2value(*ast2);
+            match (val1, val2) {
+                (Some(v1), Some(v2)) => {
+                    fs[fid].apply()(Cexp::Tuple(v1, v2))
+                }
+                (Some(v1), _) => {
+                    let nv2 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::Tuple(v1, Value::Var(nv2.clone())));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(nv2, Box::new(ce), Box::new(ass_ins))})));
+                    norm_exp(_ast2, fs.len()-1, fs)
+                }
+                (_, Some(v2)) => {
+                    let nv1 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::Tuple(Value::Var(nv1.clone()), v2));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(nv1, Box::new(ce), Box::new(ass_ins))})));
+                    norm_exp(_ast1, fs.len()-1, fs)
+                }
+                (None, None) => {
+                    let nv1 = get_fresh_var();
+                    let nv2 = get_fresh_var();
+                    let ass_ins = fs[fid].apply()(Cexp::Tuple(Value::Var(nv1.clone()), Value::Var(nv2.clone())));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv2), Box::new(ce), Box::new(ass_ins))})));
+                    let nast2 = Box::new(norm_exp(_ast2, fs.len()-1, fs));
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(duplicate_var(nv1), Box::new(ce), nast2)})));
+                    norm_exp(_ast1, fs.len()-1, fs)
+                }
+            }
         }
         Ast::Proj(ast1, v) => {
             let nv = get_fresh_var();
