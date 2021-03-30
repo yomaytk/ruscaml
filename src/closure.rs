@@ -297,14 +297,13 @@ fn convert(normexp: normal::Exp, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
         Letrec(id1, id2, nme1, nme2) => {
             let mut args = vec![id1.clone(), id2.clone()];
             let (mut fvs, nme1) = find_fv(*nme1, &mut args);
-            let mut cfs = vec![AsgFun::new(Box::new(ef))];
+            let mut f = AsgFun::new(Box::new(ef));
             for i in 0..fvs.len() {
-                let f = cfs.last_mut().unwrap().apply();
                 let fvsi = fvs[i].clone();
                 let _id1 = id1.clone();
-                cfs.push(AsgFun::new(Box::new(move |ce| { Exp::Let(fvsi, Box::new(Cexp::Proj(Value::Var(_id1.clone()), i as i32 + 1)), Box::new(f(ce))) })));
+                f = AsgFun::new(Box::new(move |ce| { Exp::Let(fvsi, Box::new(Cexp::Proj(Value::Var(_id1.clone()), i as i32 + 1)), Box::new(f.apply()(ce))) }));
             }
-            fs.push(std::mem::replace(&mut cfs.last_mut().unwrap(), AsgFun::new(Box::new(ef))));
+            fs.push(f);
             let csexp1 = convert(nme1, fs.len()-1, fs);
             let ffv = get_fresh_function_var(&id1[..], 'b');
             fvs.insert(0, ffv.clone());
