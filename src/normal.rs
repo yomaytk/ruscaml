@@ -16,7 +16,7 @@ fn get_fresh_var() -> String {
     s
 }
 
-fn duplicate_var(nv: String) -> String {
+pub fn duplicate_var(nv: String) -> String {
     let mut s = String::from("@v");
     s.push_str(&nv[2..]);
     s
@@ -145,7 +145,7 @@ pub enum Bintype {
 }
 
 impl Bintype {
-    fn bintype_signal(self) -> char {
+    pub fn bintype_signal(self) -> char {
         use Bintype::*;
         match self {
             Plus => { '+' }
@@ -213,8 +213,8 @@ fn norm_exp(ast: Ast, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
                     Exp::Let(id, Box::new(Cexp::Val(val1)), Box::new(norm_exp(*ast2, fid, fs)))
                 }
                 (None, _ast1) => {
-                    let nast2 = Box::new(norm_exp(*ast2, fid, fs));
-                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(id, Box::new(ce), nast2)})));
+                    let nast2 = norm_exp(*ast2, fid, fs);
+                    fs.push(AsgFun::new(Box::new(|ce| { Exp::Let(id, Box::new(ce), Box::new(nast2)) })));
                     norm_exp(_ast1, fs.len()-1, fs)
                 }
             }

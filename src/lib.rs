@@ -5,6 +5,7 @@ use std::fs;
 pub mod lexer;
 pub mod parser;
 pub mod normal;
+pub mod closure;
 
 use lexer::*;
 

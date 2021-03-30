@@ -3,6 +3,7 @@ extern crate ruscaml;
 use ruscaml::lexer::*;
 use ruscaml::parser::*;
 use ruscaml::normal::*;
+use ruscaml::closure::*;
 
 // use std::io::{BufWriter, Write};
 // use std::env;
@@ -19,8 +20,11 @@ fn main() {
     let ast = parse(tokenset);
 
     let norm_ast = normalize(ast);
-
-    norm_ast.program_display();
+    // norm_ast.program_display();
+    
+    let closed_norm = closure(norm_ast);
+    closed_norm.program_display();
+        
     // let mut f = BufWriter::new(fs::File::create("a.s").unwrap());
     
     // f.write(b".text\n").unwrap();

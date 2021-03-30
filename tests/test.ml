@@ -18,6 +18,15 @@ let a = 3 in loop b = 3 in recur b;;
 let rec f = fun x -> x+1 in loop d = 3 in recur (f 5);;
 if true then loop f = 4 in recur 4 else 5;;
 (fun x -> fun y -> x + y) 2 3;;
+fun x -> fun y -> x + y;;
+let a = 1 in
+let b = 2 in
+let c = 3 in
+let rec g = fun x -> a * x + c in
+g 4;;
+let rec h = fun x -> h (x+1) in
+h 0;;
+(fun x -> x+12) 23;;
 
 (* recur check violataion *)
 let a = 4 in recur 5;;
