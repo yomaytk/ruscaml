@@ -22,7 +22,7 @@ fun x -> fun y -> x + y;;
 let a = 1 in
 let b = 2 in
 let c = 3 in
-let rec g = fun x -> a * x + c in
+let rec g = fun x -> a * x + c + d in
 g 4;;
 let rec h = fun x -> h (x+1) in
 h 0;;

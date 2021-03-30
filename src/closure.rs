@@ -298,19 +298,13 @@ fn convert(normexp: normal::Exp, fid: usize, fs: &mut Vec<AsgFun>) -> Exp {
             let mut args = vec![id1.clone(), id2.clone()];
             let (mut fvs, nme1) = find_fv(*nme1, &mut args);
             let mut cfs = vec![AsgFun::new(Box::new(ef))];
-            let mut projv = vec![];
             for i in 0..fvs.len() {
-                projv.push(Box::new(Cexp::Proj(Value::Var(id1.clone()), i as i32 + 1)));
-            }
-            for i in 0..fvs.len() {
-                let lid = cfs.len()-1;
-                let f = cfs[lid].apply();
+                let f = cfs.last_mut().unwrap().apply();
                 let fvsi = fvs[i].clone();
-                let proji = projv[i].clone();
-                cfs.push(AsgFun::new(Box::new(|ce| { Exp::Let(fvsi, proji, Box::new(f(ce))) })));
+                let _id1 = id1.clone();
+                cfs.push(AsgFun::new(Box::new(move |ce| { Exp::Let(fvsi, Box::new(Cexp::Proj(Value::Var(_id1.clone()), i as i32 + 1)), Box::new(f(ce))) })));
             }
-            let lid = cfs.len()-1;
-            fs.push(std::mem::replace(&mut cfs[lid], AsgFun::new(Box::new(ef))));
+            fs.push(std::mem::replace(&mut cfs.last_mut().unwrap(), AsgFun::new(Box::new(ef))));
             let csexp1 = convert(nme1, fs.len()-1, fs);
             let ffv = get_fresh_function_var(&id1[..], 'b');
             fvs.insert(0, ffv.clone());
