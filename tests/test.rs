@@ -38,6 +38,10 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("");
             let failed_stdout = failed.stdout;
             println!("{}", std::str::from_utf8(&failed_stdout).unwrap());
+            let _ = Command::new("rm")
+                .arg("./tests/onetest.ml")
+                .output()
+                .expect("failed to delete onetest.ml");
             std::process::exit(1);
         }
         println!("##########################################");

@@ -6,6 +6,7 @@ pub mod lexer;
 pub mod parser;
 pub mod normal;
 pub mod closure;
+pub mod flat;
 
 use lexer::*;
 

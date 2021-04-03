@@ -32,7 +32,7 @@ impl Cexp {
     pub fn program_display(self) {
         use Cexp::*;
         match self {
-            Val(Value::Var(v)) => { print!("{}", v); }
+            Val(Value::Var(id)) => { print!("{}", id); }
             Val(Value::Intv(v)) => { print!("{}", v); }
             Binop(tty, val1, val2) => {
                 Val(val1).program_display();
@@ -103,14 +103,14 @@ impl Exp {
                 exp.program_display();
             }
             Letrec(id1, idls, exp1, exp2) => {
-                print!("let rec {} = fun ", id1);
+                print!("let rec {} ", id1);
                 print!("(");
                 for i in 0..idls.len() {
                     print!("{}", idls[i]);
                     if i+1 == idls.len() { break }
                     print!(", ");
                 }
-                print!(") -> ");
+                print!(") = ");
                 match *exp1 {
                     Let(..) | Letrec(..) | Loop(..) => { 
                         print!("\n");

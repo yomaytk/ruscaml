@@ -22,7 +22,7 @@ pub fn duplicate_var(nv: String) -> String {
     s
 }
 
-#[derive(Clone, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum Value {
     Var(Id),
     Intv(i32)
@@ -53,7 +53,7 @@ impl Cexp {
     pub fn program_display(self) {
         use Cexp::*;
         match self {
-            Val(Value::Var(v)) => { print!("{}", v); }
+            Val(Value::Var(id)) => { print!("{}", id); }
             Val(Value::Intv(v)) => { print!("{}", v); }
             Binop(tty, val1, val2) => {
                 Val(val1).program_display();
