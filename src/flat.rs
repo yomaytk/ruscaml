@@ -47,9 +47,13 @@ impl Program {
         self.0.push(decl)
     }
     pub fn program_display(self) {
-        let decls = self.0;
-        for decl in decls {
-            decl.program_display();
+        let mut decls = self.0;
+        decls.reverse();
+        loop {
+            if let Some(decl) = decls.pop() {
+                decl.program_display();
+            }
+            if decls.is_empty() { break; }
             print!(" in\n");
         }
     }
