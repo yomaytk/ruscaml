@@ -37,19 +37,26 @@ fn get_loopinfo() -> (Label, Ofs) {
 }
 
 #[derive(Clone, Debug)]
-pub struct Program(pub Vec<Decl>);
+pub struct Program {
+    pub decls: Vec<Decl>,
+    pub ret: Instr
+}
 
 impl Program {
     fn new() -> Self {
-        Self(vec![])
+        Self {
+            decls: vec![],
+            ret: Instr::Dummy,
+        }
     }
     fn add(&mut self, decl: Decl) {
-        self.0.push(decl);
+        self.decls.push(decl);
     }
     pub fn program_display(self) {
-        for decl in self.0 {
+        for decl in self.decls {
             decl.program_display();
         }
+        self.ret.program_display();
     }
 }
 
@@ -77,7 +84,7 @@ impl Decl {
 }
 
 #[derive(Debug, Clone)]
-enum Operand {
+pub enum Operand {
     Param(i32),
     Local(Ofs),
     Proc(Label),
@@ -98,7 +105,7 @@ impl Operand {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
-enum Instr {
+pub enum Instr {
     Move(Ofs, Operand),
     Binop(Ofs, Bintype, Operand, Operand),
     Label(Label),
@@ -111,6 +118,7 @@ enum Instr {
     Read(Ofs, Operand, i32),
     Begin(Label),
     End(Label),
+    Dummy,
 }
 
 impl Instr {
@@ -181,6 +189,7 @@ impl Instr {
                 print!(")\n");
             }
             Begin(..) | End(..) => { print!(" Begin or End is unimplemented. "); }
+            Dummy => {}
         }
     }
 }
@@ -277,7 +286,7 @@ pub fn trans_pg(pg: flat::Program) -> Program {
     let mut program = Program::new();
     for flat::Recdecl(funame, args, body) in pg.recs {
         let mut decl = Decl::new(0, vec![]);
-        decl.addinstr(Instr::Label(funame));
+        decl.addinstr(Instr::Label(funame.clone()));
         env.inc();
         let mut pari = 1;
         for arg in args {
@@ -289,8 +298,11 @@ pub fn trans_pg(pg: flat::Program) -> Program {
         trans_exp(*body, &mut decl, &mut env);
         env.dec();
         decl.vc = *STACK_POS.lock().unwrap()-1;
-        *STACK_POS.lock().unwrap() = 1;
+        if "_toplevel" == &funame[..] {
+            program.ret = Instr::Ret(Operand::Local(decl.vc));
+        }
         program.add(decl);
+        *STACK_POS.lock().unwrap() = 1;
     }
     program
 }
