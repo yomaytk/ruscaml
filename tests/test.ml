@@ -28,6 +28,7 @@ g 4;;
 let rec h = fun x -> h (x+1) in
 h 0;;
 (fun x -> x+12) 23;;
+let a = let a = 1 in a+1 in a;;
 
 (* recur check violataion *)
 let a = 4 in recur 5;;

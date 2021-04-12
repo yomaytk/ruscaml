@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
@@ -8,7 +7,7 @@ use super::normal::Bintype;
 pub static PROG: Lazy<Mutex<Program>> = Lazy::new(|| Mutex::new(Program::new()));
 
 #[derive(Clone, Debug)]
-struct Recdecl(Id, Vec<Id>, Box<Exp>);
+pub struct Recdecl(pub Id, pub Vec<Id>, pub Box<Exp>);
 
 impl Recdecl {
     fn new(id: Id, args: Vec<Id>, exp: Exp) -> Self {
@@ -37,23 +36,27 @@ impl Recdecl {
 }
 
 #[derive(Clone, Debug)]
-pub struct Program(Vec<Recdecl>);
+pub struct Program{
+    pub recs: Vec<Recdecl>   
+}
 
 impl Program {
     fn new() -> Self {
-        Self(vec![])
+        Self {
+            recs: vec![]
+        }
     }
     fn add(&mut self, decl: Recdecl) {
-        self.0.push(decl)
+        self.recs.push(decl)
     }
     pub fn program_display(self) {
-        let mut decls = self.0;
-        decls.reverse();
+        let mut recs = self.recs;
+        recs.reverse();
         loop {
-            if let Some(decl) = decls.pop() {
+            if let Some(decl) = recs.pop() {
                 decl.program_display();
             }
-            if decls.is_empty() { break; }
+            if recs.is_empty() { break; }
             print!(" in\n");
         }
     }
@@ -67,7 +70,7 @@ pub enum Value {
 }
 
 impl Value {
-    fn nval2fval(nval: normal::Value, valf: bool) -> Value {
+    pub fn nval2fval(nval: NV, valf: bool) -> Value {
         use normal::Value::*;
         match nval {
             Var(s) => {
@@ -170,52 +173,7 @@ impl Exp {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Env {
-    vals: HashMap<normal::Value, Value>,
-    prev: Option<Box<Env>>
-}
-
-impl Env {
-    fn new() -> Self {
-        Self {
-            vals: HashMap::new(),
-            prev: None
-        }
-    }
-    fn inc(&mut self) {
-        let curenv = std::mem::replace(self, Env::new());
-        *self = Self {
-            vals: HashMap::new(),
-            prev: Some(Box::new(curenv))
-        }
-    }
-    fn dec(&mut self) {
-        let env = std::mem::replace(&mut (*self).prev, None);
-        *self = *env.unwrap()
-    }
-    fn find(&self, tval: &normal::Value) -> Value {
-        if let normal::Value::Intv(v) = tval {
-            return Value::Intv(*v);
-        }
-        let mut nenv = self;
-        loop {
-            if let Some(val) = nenv.vals.get(tval) {
-                return val.clone()
-            } else {
-                match nenv.prev {
-                    None => { panic!("cannot find variable from Env. : {:?}, variable: {:?}", self, tval); }
-                    Some(ref next_env) => { nenv = next_env; }
-                }
-            }
-        }
-    }
-    fn addval(&mut self, val: normal::Value, valf: bool) {
-        self.vals.insert(val.clone(), Value::nval2fval(val, valf));
-    }
-}
-
-fn cce2fce(ccexp: closure::Cexp, env: &Env) -> Cexp {
+fn cce2fce(ccexp: closure::Cexp, env: &Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
         Val(val) => { Cexp::Val(env.find(&val)) }
@@ -243,7 +201,7 @@ fn cce2fce(ccexp: closure::Cexp, env: &Env) -> Cexp {
     }
 }
 
-fn sub_flatten(ccexp: closure::Cexp, env: &mut Env) -> Cexp {
+fn sub_flatten(ccexp: closure::Cexp, env: &mut Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
         If(val, clexp1, clexp2) => {
@@ -255,7 +213,7 @@ fn sub_flatten(ccexp: closure::Cexp, env: &mut Env) -> Cexp {
     }
 }
 
-fn flatten(clexp: closure::Exp, env: &mut Env) -> Exp {
+fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
     use closure::Exp::*;
     match clexp {
         Compexp(ccexp) => {
@@ -265,25 +223,25 @@ fn flatten(clexp: closure::Exp, env: &mut Env) -> Exp {
             env.inc();
             let fcexp = sub_flatten(*ccexp, env);
             env.dec();
-            env.addval(normal::Value::Var(id.clone()), true);
+            env.addval(NV::Var(id.clone()), true);
             Exp::Let(id, Box::new(fcexp), Box::new(flatten(*clexp, env)))
         }
         Loop(id, ccexp, clexp) => {
             env.inc();
             let fcexp = sub_flatten(*ccexp, env);
             env.dec();
-            env.addval(normal::Value::Var(id.clone()), true);
+            env.addval(NV::Var(id.clone()), true);
             Exp::Loop(id, Box::new(fcexp), Box::new(flatten(*clexp, env)))
         }
         Letrec(id1, args, clexp1, clexp2) => {
             env.inc();
             for arg in &args {
-                env.addval(normal::Value::Var(arg.clone()), true);
+                env.addval(NV::Var(arg.clone()), true);
             }
             let fclexp1 = flatten(*clexp1, env);
             env.dec();
             PROG.lock().unwrap().add(Recdecl::new(id1.clone(), args, fclexp1));
-            env.addval(normal::Value::Var(id1), false);
+            env.addval(NV::Var(id1), false);
             flatten(*clexp2, env)
         }
         Recur(val) => {

@@ -5,6 +5,7 @@ use ruscaml::parser::*;
 use ruscaml::normal::*;
 use ruscaml::closure::*;
 use ruscaml::flat::*;
+use ruscaml::vm::*;
 
 // use std::io::{BufWriter, Write};
 // use std::env;
@@ -27,7 +28,10 @@ fn main() {
     // closed_norm.program_display();
         
     let flatten_form = flat(closed_norm);
-    flatten_form.program_display();
+    // flatten_form.program_display();
+
+    let virtual_code = trans_pg(flatten_form);
+    virtual_code.program_display();
     // let mut f = BufWriter::new(fs::File::create("a.s").unwrap());
     
     // f.write(b".text\n").unwrap();

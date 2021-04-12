@@ -157,7 +157,7 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
                     tokenset.assert_ttype(TokenType::In);
                     let ast2 = expr(tokenset);
                     ast = Ast::Let(id, Box::new(ast1), Box::new(ast2))
-                }
+                } 
             }
         }
         TokenType::Loop => {
