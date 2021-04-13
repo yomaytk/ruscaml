@@ -9,6 +9,7 @@ type Label = String;
 pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(1) });
 pub static FRESH_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
 pub static LOOP_INFO: Lazy<Mutex<Vec<(Label, i32)>>> = Lazy::new(|| { Mutex::new(vec![]) });
+pub static REG_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0)} );
 
 fn next_stack() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
@@ -34,6 +35,12 @@ fn get_loopinfo() -> (Label, Ofs) {
     } else {
         panic!("get_looplabel error.");
     }
+}
+
+fn next_regnum() -> i32 {
+    let nreg = *REG_NUM.lock().unwrap();
+    *REG_NUM.lock().unwrap() = nreg+1;
+    nreg
 }
 
 #[derive(Clone, Debug)]
@@ -91,6 +98,20 @@ pub enum Operand {
     Intv(i32),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Reg {
+    pub vm: i32,
+    pub rm: i32
+}
+
+impl Reg {
+    fn new() -> Self {
+        Self {
+            vm: next_regnum(),
+            rm: 0,
+        }
+    }
+}
 impl Operand {
     fn program_display(self) {
         use Operand::*;
@@ -106,16 +127,19 @@ impl Operand {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Instr {
-    Move(Ofs, Operand),
-    Binop(Ofs, Bintype, Operand, Operand),
+    Move(Reg, Operand),
+    Mover(Reg, Reg),
+    Store(i32, Reg),
+    Argst(i32, Operand),
+    Binop(Reg, Bintype, Operand, Operand),
     Label(Label),
-    Br(Operand, Label),
-    Brn(Operand, Label),
+    Br(Reg, Operand, Label),
+    Brn(Reg, Operand, Label),
     Gt(Label),
-    Call(Ofs, Operand, Vec<Operand>),
-    Ret(Operand),
-    Malloc(Ofs, Vec<Operand>),
-    Read(Ofs, Operand, i32),
+    Call(Reg, Operand, Vec<Operand>),
+    Ret(Reg),
+    Malloc(Reg, Vec<Operand>),
+    Read(Reg, Operand, i32),
     Begin(Label),
     End(Label),
     Dummy,
@@ -125,32 +149,43 @@ impl Instr {
     fn program_display(self) {
         use Instr::*;
         match self {
-            Move(c, op1) => { 
-                print!(" local({}) <-", c);
+            Move(r, op1) => { 
+                print!(" r{} <-", r.vm);
                 op1.program_display();
                 print!("\n");
             }
-            Binop(c, btype, op1, op2) => {
-                print!(" local({}) <- {}(", c, btype.bintype_signal());
+            Mover(r1, r2) => {
+                print!(" r{} <- r{}\n", r1.vm, r2.vm);
+            }
+            Store(ofs, r) => {
+                print!(" Local({}) <- r{}\n", ofs, r.vm);
+            }
+            Argst(ofs, op) => {
+                print!(" r{} <- Param(", ofs);
+                op.program_display();
+                print!(" )\n");
+            }
+            Binop(r, btype, op1, op2) => {
+                print!(" r{} <- {}(", r.vm, btype.bintype_signal());
                 op1.program_display();
                 print!(", ");
                 op2.program_display();
                 print!(")\n");
             }
             Label(lb) => { print!("{}:\n", lb) }
-            Br(op, lb) => { 
-                print!(" if");
+            Br(r, op, lb) => { 
+                print!(" if r{} <- ", r.vm);
                 op.program_display();
                 print!(" then goto {}\n", lb); 
             }
-            Brn(op, lb) => { 
-                print!(" if not");
+            Brn(r, op, lb) => { 
+                print!(" if not r{} <- ", r.vm);
                 op.program_display();
                 print!(" then goto {}\n", lb); 
             }
             Gt(lb) => { print!(" goto {}", lb); }
-            Call(c, op_f, mut ops) => {
-                print!(" local({}) <-", c);
+            Call(r, op_f, mut ops) => {
+                print!(" r{} <-", r.vm);
                 op_f.program_display();
                 ops.reverse();
                 print!("(");
@@ -165,13 +200,11 @@ impl Instr {
                     print!(", ");
                 }
             }
-            Ret(op) => { 
-                print!("return(");
-                op.program_display();
-                print!(")\n");
+            Ret(r) => { 
+                print!("return(r{})", r.vm);
             }
-            Malloc(c, mut ops) => {
-                print!("new {} [", c);
+            Malloc(r, mut ops) => {
+                print!("r{} <- new [", r.vm);
                 loop {
                     if let Some(op) = ops.pop() {
                         op.program_display();
@@ -183,8 +216,8 @@ impl Instr {
                     print!(", ");
                 }
             }
-            Read(c, op, i) => {
-                print!("read {} #{}(", c, i);
+            Read(r, op, i) => {
+                print!("read r{} #{}(", r.vm, i);
                 op.program_display();
                 print!(")\n");
             }
@@ -203,80 +236,93 @@ fn trans_value(fval: flat::Value, env: &Env<String, i32>) -> Operand {
     }
 }
 
-fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, i32>) -> Operand {
+fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, i32>) -> Reg {
     use flat::Cexp::*;
     match fcexp {
-        Val(val) => { trans_value(val, env) }
+        Val(val) => {
+            let r1 = Reg::new();
+            let op = trans_value(val, env);
+            decl.addinstr(Instr::Move(r1, op));
+            r1
+        }
         Binop(btype, val1, val2) => {
-            let ofs = next_stack();
-            decl.addinstr(Instr::Binop(ofs, btype, trans_value(val1, env), trans_value(val2, env)));
-            Operand::Local(ofs)
+            let r1 = Reg::new();
+            decl.addinstr(Instr::Binop(r1, btype, trans_value(val1, env), trans_value(val2, env)));
+            r1
         }
         App(val, vals) => {
             let mut args = vec![];
             for val in vals {
                 args.push(trans_value(val, env));
             }
-            let ofs = next_stack();
-            decl.addinstr(Instr::Call(ofs, trans_value(val, env), args));
-            Operand::Local(ofs)
+            let r1 = Reg::new();
+            decl.addinstr(Instr::Call(r1, trans_value(val, env), args));
+            r1
         }
         If(val, fexp1, fexp2) => {
-            let t_e = next_label();
-            decl.addinstr(Instr::Brn(trans_value(val, env), t_e.clone()));
+            let t_e1 = next_label();
+            let t_e2 = next_label();
+            let r1 = Reg::new();
+            decl.addinstr(Instr::Brn(r1, trans_value(val, env), t_e1.clone()));
             env.inc();
-            trans_exp(*fexp1, decl, env);
+            let r2 = trans_exp(*fexp1, decl, env);
+            decl.addinstr(Instr::Mover(r1, r2));
+            decl.addinstr(Instr::Gt(t_e2.clone()));
             env.dec();
-            decl.addinstr(Instr::Label(t_e.clone()));
+            decl.addinstr(Instr::Label(t_e1.clone()));
             env.inc();
-            trans_exp(*fexp2, decl, env);
+            let r3 = trans_exp(*fexp2, decl, env);
+            decl.addinstr(Instr::Mover(r1, r3));
+            decl.addinstr(Instr::Label(t_e2.clone()));
             env.dec();
-            Operand::Local(-1)
+            r1
         }
         Tuple(vals) => {
             let mut data = vec![];
             for val in vals {
                 data.push(trans_value(val, env));
             }
-            let ofs = next_stack();
-            decl.addinstr(Instr::Malloc(ofs, data));
-            Operand::Local(ofs)
+            let r1 = Reg::new();
+            decl.addinstr(Instr::Malloc(r1, data));
+            r1
         }
         Proj(val, c) => {
-            let ofs = next_stack();
-            decl.addinstr(Instr::Read(ofs, trans_value(val, env), c));
-            Operand::Local(ofs)
+            let r1 = Reg::new();
+            decl.addinstr(Instr::Read(r1, trans_value(val, env), c));
+            r1
         }
     }
 }
 
-fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, i32>) {
+fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, i32>) -> Reg {
     use flat::Exp::*;
     match fexp {
         Compexp(fcexp) => {
-            trans_cexp(*fcexp, decl, env);
+            trans_cexp(*fcexp, decl, env)
         }
         Let(id, fcexp, fexp) => {
-            let op = trans_cexp(*fcexp, decl, env);
+            let r1 = trans_cexp(*fcexp, decl, env);
             let ofs = next_stack();
-            decl.addinstr(Instr::Move(ofs, op));
+            decl.addinstr(Instr::Store(ofs, r1));
             env.addval(id, ofs);
-            trans_exp(*fexp, decl, env);
+            trans_exp(*fexp, decl, env)
         }
         Loop(id, fcexp, fexp) => {
             let loop_l = next_label();
             decl.addinstr(Instr::Label(loop_l.clone()));
             let id_ofs = next_stack();
             add_loopinfo(loop_l, id_ofs);
-            let op = trans_cexp(*fcexp, decl, env);
-            decl.addinstr(Instr::Move(id_ofs, op));
+            let r1 = trans_cexp(*fcexp, decl, env);
+            decl.addinstr(Instr::Store(id_ofs, r1));
             env.addval(id, id_ofs);
-            trans_exp(*fexp, decl, env);
+            trans_exp(*fexp, decl, env)
         }
         Recur(val) => {
             let (loop_l, loop_ofs) = get_loopinfo();
-            decl.addinstr(Instr::Move(loop_ofs, trans_value(val, env)));
+            let r1 = trans_cexp(flat::Cexp::Val(val), decl, env);
+            decl.addinstr(Instr::Store(loop_ofs, r1));
             decl.addinstr(Instr::Gt(loop_l));
+            r1
         }
     }
 }
@@ -291,15 +337,15 @@ pub fn trans_pg(pg: flat::Program) -> Program {
         let mut pari = 1;
         for arg in args {
             let ofs = next_stack();
-            decl.addinstr(Instr::Move(ofs, Operand::Param(pari)));
+            decl.addinstr(Instr::Argst(ofs, Operand::Param(pari)));
             env.addval(arg, ofs);
             pari += 1;
         }
-        trans_exp(*body, &mut decl, &mut env);
+        let r1 = trans_exp(*body, &mut decl, &mut env);
         env.dec();
         decl.vc = *STACK_POS.lock().unwrap()-1;
         if "_toplevel" == &funame[..] {
-            program.ret = Instr::Ret(Operand::Local(decl.vc));
+            program.ret = Instr::Ret(r1);
         }
         program.add(decl);
         *STACK_POS.lock().unwrap() = 1;
