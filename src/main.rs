@@ -6,6 +6,7 @@ use ruscaml::normal::*;
 use ruscaml::closure::*;
 use ruscaml::flat::*;
 use ruscaml::vm::*;
+use ruscaml::regalloc::*;
 
 // use std::io::{BufWriter, Write};
 // use std::env;
@@ -30,8 +31,12 @@ fn main() {
     let flatten_form = flat(closed_norm);
     // flatten_form.program_display();
 
-    let virtual_code = trans_pg(flatten_form);
-    virtual_code.program_display();
+    let mut virtual_code = trans_pg(flatten_form);
+    // virtual_code.program_display(false);
+
+    regalloc(&mut virtual_code);
+    virtual_code.program_display(true);
+    
     // let mut f = BufWriter::new(fs::File::create("a.s").unwrap());
     
     // f.write(b".text\n").unwrap();

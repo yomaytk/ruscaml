@@ -2,6 +2,7 @@ use super::*;
 use super::normal::Bintype;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use regalloc::REG_SIZE;
 
 type Ofs = i32;
 type Label = String;
@@ -46,31 +47,28 @@ fn next_regnum() -> i32 {
 #[derive(Clone, Debug)]
 pub struct Program {
     pub decls: Vec<Decl>,
-    pub ret: Instr
 }
 
 impl Program {
     fn new() -> Self {
         Self {
             decls: vec![],
-            ret: Instr::Dummy,
         }
     }
     fn add(&mut self, decl: Decl) {
         self.decls.push(decl);
     }
-    pub fn program_display(self) {
+    pub fn program_display(self, real: bool) {
         for decl in self.decls {
-            decl.program_display();
+            decl.program_display(real);
         }
-        self.ret.program_display();
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Decl{
     pub vc: i32,
-    instrs: Vec<Instr>
+    pub instrs: Vec<Instr>
 }
 
 impl Decl {
@@ -83,9 +81,9 @@ impl Decl {
     fn addinstr(&mut self, instr: Instr) {
         self.instrs.push(instr);
     }
-    fn program_display(self) {
+    fn program_display(self, real: bool) {
         for instr in self.instrs {
-            instr.program_display();
+            instr.program_display(real);
         }
     }
 }
@@ -110,6 +108,26 @@ impl Reg {
             vm: next_regnum(),
             rm: 0,
         }
+    }
+    pub fn set_real(&mut self, regs: &mut [i32; REG_SIZE]) {
+        for i in 0..REG_SIZE {
+            if regs[i] == self.vm {
+                self.rm = i as i32;
+                return;
+            }
+        }
+        for i in 0..REG_SIZE {
+            if regs[i] == -1 {
+                regs[i] = self.vm;
+                self.rm = i as i32;
+                return;
+            }
+        }
+        message_error("There are enough registers.");
+    }
+    pub fn kill(&self, regs: &mut [i32; REG_SIZE]) {
+        assert!(self.rm > -1);
+        regs[self.rm as usize] = -1;
     }
 }
 impl Operand {
@@ -137,7 +155,7 @@ pub enum Instr {
     Brn(Reg, Operand, Label),
     Gt(Label),
     Call(Reg, Operand, Vec<Operand>),
-    Ret(Reg),
+    Ret(Reg, Reg),
     Malloc(Reg, Vec<Operand>),
     Read(Reg, Operand, i32),
     Begin(Label),
@@ -146,27 +164,27 @@ pub enum Instr {
 }
 
 impl Instr {
-    fn program_display(self) {
+    fn program_display(self, real: bool) {
         use Instr::*;
         match self {
-            Move(r, op1) => { 
-                print!(" r{} <-", r.vm);
+            Move(r, op1) => {
+                print!(" r{} <-", if real { r.rm } else { r.vm });
                 op1.program_display();
                 print!("\n");
             }
             Mover(r1, r2) => {
-                print!(" r{} <- r{}\n", r1.vm, r2.vm);
+                print!(" r{} <- r{}\n", if real { r1.rm } else { r1.vm }, if real { r2.rm } else { r2.vm });
             }
             Store(ofs, r) => {
-                print!(" Local({}) <- r{}\n", ofs, r.vm);
+                print!(" Local({}) <- r{}\n", ofs, if real { r.rm } else { r.vm });
             }
             Argst(ofs, op) => {
-                print!(" r{} <- Param(", ofs);
+                print!(" Local({}) <- Param(", ofs);
                 op.program_display();
                 print!(" )\n");
             }
             Binop(r, btype, op1, op2) => {
-                print!(" r{} <- {}(", r.vm, btype.bintype_signal());
+                print!(" r{} <- {}(", if real { r.rm } else { r.vm }, btype.bintype_signal());
                 op1.program_display();
                 print!(", ");
                 op2.program_display();
@@ -174,18 +192,18 @@ impl Instr {
             }
             Label(lb) => { print!("{}:\n", lb) }
             Br(r, op, lb) => { 
-                print!(" if r{} <- ", r.vm);
+                print!(" if r{} <- ", if real { r.rm } else { r.vm });
                 op.program_display();
                 print!(" then goto {}\n", lb); 
             }
             Brn(r, op, lb) => { 
-                print!(" if not r{} <- ", r.vm);
+                print!(" if not r{} <- ", if real { r.rm } else { r.vm });
                 op.program_display();
                 print!(" then goto {}\n", lb); 
             }
-            Gt(lb) => { print!(" goto {}", lb); }
+            Gt(lb) => { print!(" goto {}\n", lb); }
             Call(r, op_f, mut ops) => {
-                print!(" r{} <-", r.vm);
+                print!(" r{} <-", if real { r.rm } else { r.vm });
                 op_f.program_display();
                 ops.reverse();
                 print!("(");
@@ -200,11 +218,12 @@ impl Instr {
                     print!(", ");
                 }
             }
-            Ret(r) => { 
-                print!("return(r{})", r.vm);
+            Ret(r1, r2) => { 
+                print!(" r{} <- r{}\n", if real { r1.rm } else { r1.vm }, if real { r2.rm } else { r2.vm });
+                print!(" return(r{})\n", if real { r1.rm } else { r1.vm });
             }
             Malloc(r, mut ops) => {
-                print!("r{} <- new [", r.vm);
+                print!("r{} <- new [", if real { r.rm } else { r.vm });
                 loop {
                     if let Some(op) = ops.pop() {
                         op.program_display();
@@ -217,9 +236,9 @@ impl Instr {
                 }
             }
             Read(r, op, i) => {
-                print!("read r{} #{}(", r.vm, i);
+                print!("read r{} <- #{}(", if real { r.rm } else { r.vm }, i);
                 op.program_display();
-                print!(")\n");
+                print!(" )\n");
             }
             Begin(..) | End(..) => { print!(" Begin or End is unimplemented. "); }
             Dummy => {}
@@ -344,9 +363,8 @@ pub fn trans_pg(pg: flat::Program) -> Program {
         let r1 = trans_exp(*body, &mut decl, &mut env);
         env.dec();
         decl.vc = *STACK_POS.lock().unwrap()-1;
-        if "_toplevel" == &funame[..] {
-            program.ret = Instr::Ret(r1);
-        }
+        let ra1 = Reg::new();
+        decl.addinstr(Instr::Ret(ra1, r1));
         program.add(decl);
         *STACK_POS.lock().unwrap() = 1;
     }

@@ -9,6 +9,7 @@ pub mod normal;
 pub mod closure;
 pub mod flat;
 pub mod vm;
+pub mod regalloc;
 
 use lexer::*;
 
