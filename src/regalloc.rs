@@ -10,15 +10,17 @@ pub fn regalloc(pg: &mut vm::Program) {
         for instr in &mut decl.instrs {
             use vm::Instr::*;
             match instr {
-                Move(r, _) => { r.set_real(&mut regs); }
-                Mover(r1, r2) => {
+                Move(r, _) => { 
+                    r.set_real(&mut regs); 
+                }
+                Mover(r1, r2) | Binop(_, r1, r2) => {
                     r1.set_real(&mut regs);
-                    r2.kill(&mut regs);
+                    r2.set_real(&mut regs);
                 }
                 Store(_, r) => {
-                    r.kill(&mut regs);
+                    r.set_real(&mut regs);
                 }
-                Binop(r, ..) => {
+                Load(r, _) => {
                     r.set_real(&mut regs);
                 }
                 Br(r, ..) | Brn(r, ..) | Call(r, ..) | Malloc(r, ..) | Read(r, ..) => {
@@ -27,6 +29,9 @@ pub fn regalloc(pg: &mut vm::Program) {
                 Ret(r1, r2) => {
                     r1.rm = A1;
                     r2.set_real(&mut regs);
+                }
+                Kill(r) => {
+                    r.kill(&mut regs);
                 }
                 _ => {}
             }
