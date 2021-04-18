@@ -14,5 +14,15 @@ ruscaml has some stages, and here is an overview of the internals.
 6. allocate physical registers.
 7. Output arm64 assembly code.
 
+## Run
+
+Build.
+
+    $ cargo build  
+ 
+Run main test of `./test/test.ml`.
+
+    $ cargo test -- --nocapture
+
 ## demo
 ![demo](https://user-images.githubusercontent.com/45335576/115149949-4273db80-a0a1-11eb-8980-777d7c7641fe.gif)
