@@ -7,6 +7,7 @@ use ruscaml::closure::*;
 use ruscaml::flat::*;
 use ruscaml::vm::*;
 use ruscaml::regalloc::*;
+use ruscaml::codegen::*;
 
 // use std::io::{BufWriter, Write};
 // use std::env;
@@ -35,7 +36,9 @@ fn main() {
     // virtual_code.program_display(false);
 
     regalloc(&mut virtual_code);
-    virtual_code.program_display(true);
+    // virtual_code.program_display(true);
+
+    codegen(virtual_code);
     
     // let mut f = BufWriter::new(fs::File::create("a.s").unwrap());
     

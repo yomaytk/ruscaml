@@ -10,6 +10,7 @@ pub mod closure;
 pub mod flat;
 pub mod vm;
 pub mod regalloc;
+pub mod codegen;
 
 use lexer::*;
 
