@@ -109,8 +109,8 @@ impl Environment<NV, FV, bool> for Env<NV, FV> {
     }
 }
 
-impl Environment<String, i32, i32> for Env<String, i32> {
-    fn find(&self, key: &String) -> i32 {
+impl Environment<String, (vm::Ofs, i32), (vm::Ofs, i32)> for Env<String, (vm::Ofs, i32)> {
+    fn find(&self, key: &String) -> (vm::Ofs, i32) {
         let mut nenv = self;
         loop {
             if let Some(value) = nenv.vals.get(key) {
@@ -123,7 +123,7 @@ impl Environment<String, i32, i32> for Env<String, i32> {
             }
         }
     }
-    fn addval(&mut self, key: String, value: i32) {
+    fn addval(&mut self, key: String, value: (vm::Ofs, i32)) {
         self.vals.insert(key, value);
     }
 }

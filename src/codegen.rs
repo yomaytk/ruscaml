@@ -1,39 +1,52 @@
 use super::*;
 use super::vm::*;
 
+macro_rules! emit_reg {
+    ($r: ident) => {
+        if $r.byte == 4 { format!("w{}", $r.rm) } else { format!("x{}", $r.rm) }
+    }
+}
+
 pub fn codegen(program: vm::Program) {
+    print!(".text\n");
+    print!("\t.global main\n");
     for decl in program.decls {
+        let mut spofs = 16 * ((decl.vc*4+15)%16);
         print!("{}:\n", decl.funlb);
-        print!("\tpush {{r7}}\n");
-        print!("\tsub sp, sp, #{}\n", decl.vc*4 + 8);
-        print!("\tadd r7, sp, #0\n");
+        if decl.haveapp {
+            spofs += 16;
+            print!("\tstp, x29, x30, [sp, -{}]!\n", spofs);
+            print!("\tmov, x29, sp\n");
+        } else if spofs > 0 {
+            print!("\tsub sp, sp, #{}\n", spofs);
+        }
         for instr in decl.instrs {
             use Instr::*;
             use normal::Bintype::*;
             match instr {
                 Move(r, op) => {
                     if let Operand::Intv(v) = op {
-                        print!("\tmovs r{}, #{}\n", r.rm, v);
+                        print!("\tmov {}, #{}\n", emit_reg!(r), v);
                     } else {
                         panic!("codegen Move error. {:?}", op);
                     }
                 }
                 Mover(r1, r2) => {
-                    print!("\tmov r{}, r{}\n", r1.rm, r2.rm);
+                    print!("\tmov {}, {}\n", emit_reg!(r1), emit_reg!(r2));
                 }
                 Store(ofs, r) => {
-                    print!("\tstr r{}, [r7, #{}]\n", r.rm, 4*ofs+8);
+                    print!("\tstr {}, [sp, {}]\n", emit_reg!(r), spofs-4*ofs);
                 }
                 Load(r, ofs) => {
-                    print!("\tldr r{}, [r7, #{}]\n", r.rm, 4*ofs+8);
+                    print!("\tldr {}, [sp, {}]\n", emit_reg!(r), spofs-4*ofs);
                 }
                 Loadf(r, id) => {
-                    print!("\tmovw r{}, #:lower16:{}\n", r.rm, id);
-                    print!("\tmovw r{}, #:upper16:{}\n", r.rm, id);
+                    print!("\tadrp {}, {}\n", emit_reg!(r), id);
+                    print!("\tadd {}, {}, :lo12:{}\n", emit_reg!(r), emit_reg!(r), id);
                 }
                 Argst(ofs, op) => {
                     if let Operand::Param(i) = op {
-                        print!("\tstr r{}, [r7, #{}]\n", i, 4*ofs+8);
+                        print!("\tstr x{}, [sp, {}]\n", i, 8*ofs);
                     } else {
                         panic!("codegen Argst error.");
                     }
@@ -41,17 +54,15 @@ pub fn codegen(program: vm::Program) {
                 Binop(btype, r1, r2) => {
                     match btype {
                         Plus => {
-                            print!("\tadd r{}, r{}, r{}\n", r1.rm, r1.rm, r2.rm);
+                            print!("\tadd {}, {}, {}\n", emit_reg!(r1), emit_reg!(r1), emit_reg!(r2));
                         }
                         Mult => {
-                            print!("\tmul r{}, r{}, r{}\n", r1.rm, r1.rm, r2.rm);
+                            print!("\tmul {}, {}, {}\n", emit_reg!(r1), emit_reg!(r1), emit_reg!(r2));
                         }
                         Lt => {
-                            print!("\tcmp r{}, r{}\n", r1.rm, r2.rm);
-                            print!("\tite lt\n");
-                            print!("\tmovlt r{}, #1\n", r1.rm);
-                            print!("\tmovge, r{}, #0\n", r2.rm);
-                            print!("\tuxtb r{}, r{}\n", r1.rm, r1.rm);
+                            print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
+                            print!("\tcset lt\n");
+                            print!("\tand {}, {}\n", emit_reg!(r1), emit_reg!(r1));
                         }
                     }
                 }
@@ -59,42 +70,49 @@ pub fn codegen(program: vm::Program) {
                     print!("{}:\n", lb);
                 }
                 Br(r, lb) => {
-                    print!("\tcmp r{}, #1\n", r.rm);
+                    print!("\tcmp {}, #1\n", emit_reg!(r));
                     print!("\tbeq {}\n", lb);
                 }
                 Gt(lb) => {
                     print!("\tb {}\n", lb);
                 }
                 Call(r, args) => {
-                    print!("\tpush r0\n");
-                    print!("\tpush r1\n");
-                    for i in 0..2 {
-                        print!("\tmov r{}, r{}\n", i, args[i].rm);
+                    for i in 0..args.len() {
+                        print!("\tmov x{}, x{}\n", i, args[i].rm);
                     }
-                    print!("\tblx r{}\n", r.rm);
+                    print!("\tblr {}\n", emit_reg!(r));
+                    print!("\tmov {}, w0\n", emit_reg!(r));
                 }
                 Ret(r1, r2) => {
-                    print!("\tmov r{}, r{}\n", r1.rm, r2.rm);
+                    print!("\tmov {}, {}\n", emit_reg!(r1), emit_reg!(r2));
                 }
                 Malloc(r, data) => {
-                    print!("\tpush r0\n");
-                    print!("\tmov r0, {}\n", data.len()*4);
-                    print!("\tbl mymalloc\n");
-                    for i in 0..data.len() {
-                        print!("\tstr r0, [r{}, #{}]\n", data[i].rm, i*4);
+                    print!("\tsub sp, sp, #8\n");
+                    print!("\tstr x0, [sp, 8]\n");
+                    let mut datasize = 0;
+                    for d in &data {
+                        datasize += d.byte;
                     }
-                    print!("\tmov r{}, r0\n", r.rm);
-                    print!("\tldr r0, [sp], #4\n");
+                    print!("\tmov w0, {}\n", datasize);
+                    print!("\tbl mymalloc\n");
+                    let mut ofs = 0;
+                    for d in data {
+                        print!("\tstr {}, [x0, {}]\n", emit_reg!(d), ofs);
+                        ofs += d.byte;
+                    }
+                    print!("\tmov x{}, x0\n", r.rm);
+                    print!("\tldr x0, [sp, 8]\n");
+                    print!("\tadd sp, sp #8\n");    
                 }
-                Read(r1, r2, ofs) => {
-                    print!("\tldr r{}, [r{}, #{}]\n", r1.rm, r2.rm, ofs*4);
+                Read(r, ofs) => {
+                    print!("\tldr x{}, [{}, {}]\n", r.rm, emit_reg!(r), ofs);
                 }
                 Begin(..) | End(..) | Kill(..) | Dummy => {}
             }
         }
-        print!("\tadd r7, r7, #{}\n", decl.vc*4+8);
-        print!("\tmov sp, r7\n");
-        print!("\tldr r7, [sp]\n");
-        print!("\tbx lr\n");
+        if decl.haveapp {
+            print!("\tldp x29, x30, [sp], {}\n", spofs);
+        }
+        print!("\tret\n");
     }
 }

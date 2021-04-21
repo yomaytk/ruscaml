@@ -1,10 +1,12 @@
 use super::*;
 use super::normal::Bintype;
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use regalloc::REG_SIZE;
 
-type Ofs = i32;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+
+pub type Ofs = i32;
 type Label = String;
 
 macro_rules! print_reg {
@@ -13,14 +15,28 @@ macro_rules! print_reg {
     };
 }
 
+macro_rules! reg_byte {
+    ($r: ident) => {
+        if $r.byte == 4 { next_stack32() } else { assert_eq!($r.byte, 8); next_stack64() }
+    };
+}
+
 pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(1) });
 pub static FRESH_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
 pub static LOOP_INFO: Lazy<Mutex<Vec<(Label, i32)>>> = Lazy::new(|| { Mutex::new(vec![]) });
 pub static REG_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0)} );
+pub static HAVE_APP: Lazy<Mutex<bool>> = Lazy::new(|| { Mutex::new(false)} );
+pub static MALLOC_INFO: Lazy<Mutex<HashMap<String, Vec<i32>>>> = Lazy::new(|| { Mutex::new(HashMap::new()) });
 
-fn next_stack() -> i32 {
+fn next_stack32() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
     *STACK_POS.lock().unwrap() = pos+1;
+    pos
+}
+
+fn next_stack64() -> i32 {
+    let pos = *STACK_POS.lock().unwrap();
+    *STACK_POS.lock().unwrap() = pos+2;
     pos
 }
 
@@ -50,6 +66,11 @@ fn next_regnum() -> i32 {
     nreg
 }
 
+fn malloc_info_dummy() -> Option<Vec<i32>> {
+    let res = (*MALLOC_INFO).lock().unwrap().remove("dummy");
+    res
+}
+
 #[derive(Clone, Debug)]
 pub struct Program {
     pub decls: Vec<Decl>,
@@ -75,15 +96,17 @@ impl Program {
 pub struct Decl{
     pub funlb: Label,
     pub vc: i32,
-    pub instrs: Vec<Instr>
+    pub instrs: Vec<Instr>,
+    pub haveapp: bool,
 }
 
 impl Decl {
-    fn new(funlb: Label, vc: i32, instrs: Vec<Instr>) -> Self {
+    fn new(funlb: Label, vc: i32, instrs: Vec<Instr>, haveapp: bool) -> Self {
         Self {
             funlb,
             vc,
             instrs,
+            haveapp,
         }
     }
     fn addinstr(&mut self, instr: Instr) {
@@ -99,7 +122,7 @@ impl Decl {
 #[derive(Debug, Clone)]
 pub enum Operand {
     Param(i32),
-    Local(Ofs),
+    Local(Ofs, i32),
     Proc(Label),
     Intv(i32),
 }
@@ -107,36 +130,40 @@ pub enum Operand {
 #[derive(Debug, Clone, Copy)]
 pub struct Reg {
     pub vm: i32,
-    pub rm: i32
+    pub rm: i32,
+    pub byte: i32,
 }
 
 impl Reg {
-    fn new() -> Self {
+    fn new(byte: i32) -> Self {
         Self {
             vm: next_regnum(),
             rm: -1,
+            byte,
         }
     }
-    pub fn set_real(&mut self, regs: &mut [i32; REG_SIZE]) {
+    pub fn set_real(&mut self, regs: &mut [i32; REG_SIZE+1]) {
+        // find real register already allocated
         for i in 0..REG_SIZE {
             if regs[i] == self.vm {
-                self.rm = i as i32 + 2;
+                self.rm = i as i32;
                 return;
             }
         }
-        for i in 0..REG_SIZE {
-            if regs[i] == -1 {
-                regs[i] = self.vm;
-                self.rm = i as i32 + 2;
+        // allocate real register
+        for i in (0..REG_SIZE).rev() {
+            if regs[i+1] == -1 {
+                regs[i+1] = self.vm;
+                self.rm = i as i32;
                 return;
             }
         }
-        message_error("There are enough registers.");
+        // message_error("There are enough registers.");
     }
-    pub fn kill(&mut self, regs: &mut [i32; REG_SIZE]) {
+    pub fn kill(&mut self, regs: &mut [i32; REG_SIZE+1]) {
         for i in 0..REG_SIZE {
             if regs[i] == self.vm {
-                self.rm = i as i32 + 2;
+                self.rm = i as i32;
                 regs[i] = -1;
                 return;
             }
@@ -149,7 +176,7 @@ impl Operand {
         use Operand::*;
         match self {
             Param(c) => { print!(" param({})", c); }
-            Local(c) => { print!(" local({})", c); }
+            Local(c, _) => { print!(" local({})", c); }
             Proc(lb) => { print!(" labimm {}", lb); }
             Intv(c) => { print!(" imm({})", c); }
         }
@@ -172,7 +199,7 @@ pub enum Instr {
     Call(Reg, Vec<Reg>),
     Ret(Reg, Reg),
     Malloc(Reg, Vec<Reg>),
-    Read(Reg, Reg, i32),
+    Read(Reg, i32),
     Begin(Label),
     End(Label),
     Kill(Reg),
@@ -246,8 +273,8 @@ impl Instr {
                     print!(",");
                 }
             }
-            Read(r1, r2, i) => {
-                print!("read r{} <- #{}( r{} )\n", print_reg!(r1, real), i, print_reg!(r2, real));
+            Read(r, ofs) => {
+                print!("read r{} <- #{}( r{} )\n", print_reg!(r, real), ofs, print_reg!(r, real));
             }
             Kill(r) => {
                 print!("kill r{}\n", print_reg!(r, real));
@@ -258,31 +285,34 @@ impl Instr {
     }
 }
 
-fn trans_value(fval: flat::Value, env: &Env<String, i32>) -> Operand {
+fn trans_value(fval: flat::Value, env: &Env<String, (Ofs, i32)>) -> Operand {
     use flat::Value::*;
     match fval {
-        Var(id) => { Operand::Local(env.find(&id)) }
+        Var(id) => { 
+            let (ofs, b4) = env.find(&id);
+            Operand::Local(ofs, b4)
+        }
         Fun(id) => { Operand::Proc(id) }
         Intv(v) => { Operand::Intv(v) }
     }
 }
 
-fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, i32>) -> Reg {
+fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, (Ofs, i32)>) -> Reg {
     let op = trans_value(val, env);
     use Operand::*;
     match op {
-        Local(ofs) => {
-            let r = Reg::new();
+        Local(ofs, byte) => {
+            let r = Reg::new(byte);
             decl.addinstr(Instr::Load(r, ofs));
             r
         }
         Intv(v) => {
-            let r = Reg::new();
+            let r = Reg::new(4);
             decl.addinstr(Instr::Move(r, Intv(v)));
             r
         }
         Proc(id) => {
-            let r = Reg::new();
+            let r = Reg::new(4);
             decl.addinstr(Instr::Loadf(r, id));
             r
         }
@@ -292,7 +322,7 @@ fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, i32>) -> Reg {
     }
 }
 
-fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, i32>) -> Reg {
+fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, (Ofs, i32)>) -> Reg {
     use flat::Cexp::*;
     match fcexp {
         Val(val) => {
@@ -316,6 +346,7 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, i32>) ->
             for arg in args {
                 decl.addinstr(Instr::Kill(arg));
             }
+            *HAVE_APP.lock().unwrap() = true;
             r1
         }
         If(val, fexp1, fexp2) => {
@@ -340,27 +371,31 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, i32>) ->
         }
         Tuple(vals) => {
             let mut data = vec![];
+            let mut bsizes = vec![];
             for val in vals {
-                let r = value2reg(decl, val, env);
+                let mut r = value2reg(decl, val, env);
+                r.byte = 8;
+                bsizes.push(r.byte);
                 data.push(r);
             }
-            let r1 = Reg::new();
+            let r1 = Reg::new(8);
             decl.addinstr(Instr::Malloc(r1, data.clone()));
             for d in data {
                 decl.addinstr(Instr::Kill(d));
             }
+            // assert!(!(*MALLOC_INFO).lock().unwrap().contains_key("dummy"));
+            (*MALLOC_INFO).lock().unwrap().insert(String::from("dummy"), bsizes);
             r1
         }
         Proj(val, c) => {
-            let r1 = Reg::new();
-            let r2= value2reg(decl, val, env);
-            decl.addinstr(Instr::Read(r1, r2, c));
-            r1
+            let r = value2reg(decl, val, env);
+            decl.addinstr(Instr::Read(r, c));
+            r
         }
     }
 }
 
-fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, i32>) -> Reg {
+fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, (Ofs, i32)>) -> Reg {
     use flat::Exp::*;
     match fexp {
         Compexp(fcexp) => {
@@ -368,21 +403,24 @@ fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, i32>) -> Re
         }
         Let(id, fcexp, fexp) => {
             let r1 = trans_cexp(*fcexp, decl, env);
-            let ofs = next_stack();
+            let ofs = reg_byte!(r1);
+            if let Some(bsizes) = malloc_info_dummy() {
+                (*MALLOC_INFO).lock().unwrap().insert(id.clone(), bsizes);
+            }
             decl.addinstr(Instr::Store(ofs, r1));
             decl.addinstr(Instr::Kill(r1));
-            env.addval(id, ofs);
+            env.addval(id, (ofs, r1.byte));
             trans_exp(*fexp, decl, env)
         }
         Loop(id, fcexp, fexp) => {
             let loop_l = next_label();
             decl.addinstr(Instr::Label(loop_l.clone()));
-            let id_ofs = next_stack();
-            add_loopinfo(loop_l, id_ofs);
             let r1 = trans_cexp(*fcexp, decl, env);
+            let id_ofs = reg_byte!(r1);
+            add_loopinfo(loop_l, id_ofs);
             decl.addinstr(Instr::Store(id_ofs, r1));
             decl.addinstr(Instr::Kill(r1));
-            env.addval(id, id_ofs);
+            env.addval(id, (id_ofs, r1.byte));
             trans_exp(*fexp, decl, env)
         }
         Recur(val) => {
@@ -399,23 +437,25 @@ pub fn trans_pg(pg: flat::Program) -> Program {
     let mut env = Env::new();
     let mut program = Program::new();
     for flat::Recdecl(funame, args, body) in pg.recs {
-        let mut decl = Decl::new(funame, 0, vec![]);
+        let mut decl = Decl::new(funame, 0, vec![], false);
         env.inc();
         let mut pari = 0;
         for arg in args {
-            let ofs = next_stack();
+            let ofs = next_stack64();
             decl.addinstr(Instr::Argst(ofs, Operand::Param(pari)));
-            env.addval(arg, ofs);
+            env.addval(arg, (ofs, 8));
             pari += 1;
         }
         let r1 = trans_exp(*body, &mut decl, &mut env);
         env.dec();
         decl.vc = *STACK_POS.lock().unwrap()-1;
-        let ra1 = Reg::new();
+        let mut ra1 = Reg::new(4);
+        ra1.byte = r1.byte;
         decl.addinstr(Instr::Ret(ra1, r1));
         decl.addinstr(Instr::Kill(r1));
+        decl.haveapp = *HAVE_APP.lock().unwrap();
         program.add(decl);
-        *STACK_POS.lock().unwrap() = 1;
+        *STACK_POS.lock().unwrap() = 0;
     }
     program
 }

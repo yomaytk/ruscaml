@@ -253,6 +253,6 @@ fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
 pub fn flat(clexp: closure::Exp) -> Program {
     let mut env = Env::new();
     let toplevel = flatten(clexp, &mut env);
-    PROG.lock().unwrap().add(Recdecl::new(String::from("_toplevel"), vec![], toplevel));
+    PROG.lock().unwrap().add(Recdecl::new(String::from("main"), vec![], toplevel));
     std::mem::replace(&mut PROG.lock().unwrap(), Program::new())
 }
