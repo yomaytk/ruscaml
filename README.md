@@ -1,7 +1,7 @@
 # ruscaml
 ## Overview
 
-ruscaml is a tiny miniml compiler by Rust (but in the process of creation). This compiler can interpret the some basic syntax of miniml. (See the test/test.ml directory for details.)
+ruscaml is a tiny Mincaml compiler by Rust (but in the process of creation). This compiler can interpret the some basic syntax of miniml. (See the test/test.ml directory for details.)
 <br>
 <br>
 ruscaml has some stages, and here is an overview of the internals.
@@ -13,6 +13,16 @@ ruscaml has some stages, and here is an overview of the internals.
 5. convert to virtual machine code, assuming there are innumerable physical registers.
 6. allocate physical registers.
 7. Output arm64 assembly code.
+
+## Run
+
+Build.
+
+    $ cargo build  
+ 
+Run main test of `./test/test.ml`.
+
+    $ cargo test -- --nocapture
 
 ## demo
 ![demo](https://user-images.githubusercontent.com/45335576/115149949-4273db80-a0a1-11eb-8980-777d7c7641fe.gif)
