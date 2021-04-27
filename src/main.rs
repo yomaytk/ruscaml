@@ -17,7 +17,7 @@ fn main() {
     
     // let args: Vec<String> = env::args().collect();
     
-    let tokenset = tokenize();
+    let tokenset = lex();
     
     // println!("{:?}", tokenset.tokens);
 

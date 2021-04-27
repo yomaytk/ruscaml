@@ -142,7 +142,7 @@ impl Reg {
             byte,
         }
     }
-    pub fn set_real(&mut self, regs: &mut [i32; REG_SIZE+1]) {
+    pub fn set_real(&mut self, regs: &mut [i32; REG_SIZE]) {
         // find real register already allocated
         for i in 0..REG_SIZE {
             if regs[i] == self.vm {
@@ -151,16 +151,16 @@ impl Reg {
             }
         }
         // allocate real register
-        for i in (0..REG_SIZE).rev() {
-            if regs[i+1] == -1 {
-                regs[i+1] = self.vm;
+        for i in 0..REG_SIZE {
+            if regs[i] == -1 {
+                regs[i] = self.vm;
                 self.rm = i as i32;
                 return;
             }
         }
         // message_error("There are enough registers.");
     }
-    pub fn kill(&mut self, regs: &mut [i32; REG_SIZE+1]) {
+    pub fn kill(&mut self, regs: &mut [i32; REG_SIZE]) {
         for i in 0..REG_SIZE {
             if regs[i] == self.vm {
                 self.rm = i as i32;

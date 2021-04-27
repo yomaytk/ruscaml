@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::sync::Mutex;
 
 pub mod lexer;
 pub mod parser;
@@ -18,9 +19,9 @@ type Id = String;
 type NV = normal::Value;
 type FV = flat::Value;
 
-pub static PROGRAM: Lazy<String> = Lazy::new(|| {
+pub static PROGRAM: Lazy<Mutex<String>> = Lazy::new(|| {
     let file: String = env::args().collect::<Vec<String>>().last().unwrap().clone();
-    fs::read_to_string(file).expect("failed to read file.")
+    Mutex::new(fs::read_to_string(file).expect("failed to read file."))
 });
 
 pub fn compile_error(tokenset: &TokenSet, message: &str) {
@@ -35,7 +36,7 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
     }
     for i in 0..std::usize::MAX {
         if tokenset.pos + i == tokenset.tokens.len()-1 {
-            end = (*PROGRAM).len();
+            end = (*PROGRAM).lock().unwrap().len();
             break;
         }
         if tokenset.tokens[tokenset.pos + i].position.0 == true {
@@ -44,7 +45,7 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
         }
     }
     println!("Error: {} Line: {}.", message, tokenset.tokens[tokenset.pos].position.1);
-    println!("\t{}", &(*PROGRAM)[start..end]);
+    println!("\t{}", &(*PROGRAM).lock().unwrap()[start..end]);
     print!("\t");
     for _ in 0..tokenset.tokens[tokenset.pos].position.2 - start {
         print!(" ");

@@ -1,0 +1,1 @@
+EXPECT(let rec f = fun a -> a+4 in 5;; => 5)

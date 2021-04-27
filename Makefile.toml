@@ -19,12 +19,13 @@ script = [
     "./target/debug/ruscaml ./tests/test.ml"
 ]
 
-[tasks.unit_test]
+[tasks.onetest]
 dependencies = [
-    "run"
+    "build"
 ]
 script = [
-    "./target/debug/ruscaml ./tests/onetest.ml"
+    "aarch64-linux-gnu-gcc a.s -o a",
+    "qemu-aarch64 -L /usr/aarch64-linux-gnu/ a",
 ]
 
 [tasks.run]

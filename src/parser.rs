@@ -116,6 +116,15 @@ fn ltexpr(tokenset: &mut TokenSet) -> Ast {
     last
 }
 
+fn eqexpr(tokenset: &mut TokenSet) -> Ast {
+    let lhs = ltexpr(tokenset);
+    if tokenset.consume_ttype(TokenType::Eq) {
+        let rhs = ltexpr(tokenset);
+        return Ast::Binop(TokenType::Eq, Box::new(lhs), Box::new(rhs));
+    }
+    lhs
+}
+
 fn expr(tokenset: &mut TokenSet) -> Ast {
     let ast;
     match tokenset.curtype() {
@@ -170,7 +179,7 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
             ast = Ast::Loop(id, Box::new(ast1), Box::new(ast2))
         }
         _ => {
-            ast = ltexpr(tokenset);
+            ast = eqexpr(tokenset);
         }
     }
     ast

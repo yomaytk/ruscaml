@@ -10,30 +10,27 @@ use std::process::Command;
 fn unittest() -> Result<(), Box<dyn std::error::Error>> {
     
     let mut programset = fs::read_to_string("./tests/test.ml").expect("failed to read test.ml.");
-    programset = programset.replace(";;\n", ";;");
-    let mut programs: Vec<&str> = programset.split(";;").collect();
+    programset = programset.replace(":\n", ":");
+    let mut programs: Vec<&str> = programset.split(":").collect();
     programs.pop().unwrap();
 
     for program in programs {
         let mut f = BufWriter::new(fs::File::create("./tests/onetest.ml").unwrap());
         f.write(program.as_bytes()).unwrap();
-        f.write(";;".as_bytes()).unwrap();
         f.flush()?;
-        print!("{};; => \n\n", program);
+        print!("{}\n", program);
         let output = Command::new("./target/debug/ruscaml")
-            .arg("./tests/onetest.ml")
+            .args(&["./tests/onetest.ml"])
             .output()
             .expect("failed to execute unit test");
         
         let test_stdout = output.stdout;
         let error_stdout = output.stderr;
 
-        println!("{}", std::str::from_utf8(&test_stdout).unwrap());
         if !(std::str::from_utf8(&error_stdout).unwrap() == "") {
             println!("{}", std::str::from_utf8(&error_stdout).unwrap());
             let failed = Command::new("echo")
-                .arg("-e")
-                .arg(format!("\\e[31m FAILED\\e[m [{}]", program))
+                .args(&["-e", &format!("\\e[31m FAILED COMPILE\\e[m [{}]", program)])
                 .output()
                 .expect("");
             let failed_stdout = failed.stdout;
@@ -44,12 +41,48 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("failed to delete onetest.ml");
             std::process::exit(1);
         }
-        println!("##########################################");
+
+        let mut f2 = BufWriter::new(fs::File::create("a.s").unwrap());
+        f2.write(&test_stdout).unwrap();
+        f2.flush()?;
+
+        let arm64assemble = Command::new("aarch64-linux-gnu-gcc")
+            .args(&["a.s", "-o", "a"])
+            .output()
+            .expect("");
+        
+        if !arm64assemble.status.success() {
+            let _ = Command::new("echo")
+                .arg("-e")
+                .arg(format!("\\e[31m FAILED ASSEMBLE\\e[m [{}]", program))
+                .output()
+                .expect("");
+            
+            let failed_message = arm64assemble.stderr;
+            println!("assemble error: {}", std::str::from_utf8(&failed_message).unwrap());
+            std::process::exit(1);
+        }
+
+        let qemu_exe = Command::new("qemu-aarch64")
+            .args(&["-L", "/usr/aarch64-linux-gnu", "a"])
+            .output()
+            .expect("");        
+        
+        if !qemu_exe.status.success() {
+            let _ = Command::new("echo")
+                .arg("-e")
+                .arg(format!("\\e[31m FAILED EXECUTION\\e[m [{}]", program))
+                .output()
+                .expect("");
+            std::process::exit(1);
+        }
+        println!("OK");
     }
 
-    let _ = Command::new("rm")
+        let _ = Command::new("rm")
         .arg("./tests/onetest.ml")
         .output()
         .expect("failed to delete onetest.ml");
+        
     Ok(())
 }

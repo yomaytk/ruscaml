@@ -11,7 +11,7 @@ pub fn codegen(program: vm::Program) {
     print!(".text\n");
     print!("\t.global main\n");
     for decl in program.decls {
-        let mut spofs = 16 * ((decl.vc*4+15)%16);
+        let mut spofs = 16 * ((decl.vc*4+15)/16);
         print!("{}:\n", decl.funlb);
         if decl.haveapp {
             spofs += 16;
@@ -61,8 +61,13 @@ pub fn codegen(program: vm::Program) {
                         }
                         Lt => {
                             print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
-                            print!("\tcset lt\n");
-                            print!("\tand {}, {}\n", emit_reg!(r1), emit_reg!(r1));
+                            print!("\tcset {}, lt\n", emit_reg!(r1));
+                            print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
+                        }
+                        Eq => {
+                            print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
+                            print!("\tcset {}, eq\n", emit_reg!(r1));
+                            print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
                         }
                     }
                 }

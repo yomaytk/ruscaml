@@ -1,11 +1,11 @@
 use super::*;
 use vm::*;
 
-pub const REG_SIZE: usize = 19;
+pub const REG_SIZE: usize = 10;
 pub const A1: i32 = 0;
 
 pub fn regalloc(pg: &mut vm::Program) {
-    let mut regs: [i32; 20] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
+    let mut regs: [i32; REG_SIZE] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
     for decl in &mut pg.decls {
         for instr in &mut decl.instrs {
             use vm::Instr::*;

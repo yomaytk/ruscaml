@@ -141,7 +141,8 @@ impl Exp {
 pub enum Bintype {
     Plus,
     Mult,
-    Lt
+    Lt,
+    Eq
 }
 
 impl Bintype {
@@ -151,6 +152,7 @@ impl Bintype {
             Plus => { '+' }
             Mult => { '*' }
             Lt => { '<' }
+            Eq => { '=' }
         }
     }
 }
@@ -160,6 +162,7 @@ fn ttype2btype(ttype: TokenType) -> Bintype {
         TokenType::Plus => { Bintype::Plus }
         TokenType::Mult => { Bintype::Mult }
         TokenType::Lt => { Bintype::Lt }
+        TokenType::Eq => { Bintype::Eq }
         _ => { panic!("ttyep2btype error.") }
     }
 }
