@@ -24,5 +24,3 @@ Run main test of `./test/test.ml`.
 
     $ cargo test -- --nocapture
 
-## demo
-![demo](https://user-images.githubusercontent.com/45335576/115525404-05d6f880-a2ca-11eb-9128-6927998485b5.gif)
