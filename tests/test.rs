@@ -46,8 +46,13 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
         f2.write(&test_stdout).unwrap();
         f2.flush()?;
 
+        let _ = Command::new("aarch64-linux-gnu-gcc")
+            .args(&["-c", "src/exe.c"])
+            .output()
+            .expect("this command should always sucess");
+
         let arm64assemble = Command::new("aarch64-linux-gnu-gcc")
-            .args(&["a.s", "-o", "a"])
+            .args(&["exe.o", "a.s", "-o", "a"])
             .output()
             .expect("");
         
@@ -80,7 +85,7 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
     }
 
         let _ = Command::new("rm")
-        .arg("./tests/onetest.ml")
+        .args(&["./tests/onetest.ml", "a", "exe.o"])
         .output()
         .expect("failed to delete onetest.ml");
         

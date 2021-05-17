@@ -9,7 +9,7 @@ macro_rules! emit_reg {
 
 pub fn codegen(program: vm::Program) {
     print!(".text\n");
-    print!("\t.global main\n");
+    print!("\t.global _toplevel\n");
     for decl in program.decls {
         let mut spofs = 16 * ((decl.vc*4+15)/16);
         print!("{}:\n", decl.funlb);
@@ -46,7 +46,7 @@ pub fn codegen(program: vm::Program) {
                 }
                 Argst(ofs, op) => {
                     if let Operand::Param(i) = op {
-                        print!("\tstr x{}, [sp, {}]\n", i, 8*ofs);
+                        print!("\tstr x{}, [sp, {}]\n", i, 4*ofs);
                     } else {
                         panic!("codegen Argst error.");
                     }
@@ -101,22 +101,26 @@ pub fn codegen(program: vm::Program) {
                     print!("\tmov w0, {}\n", datasize);
                     print!("\tbl mymalloc\n");
                     let mut ofs = 0;
-                    for d in data {
-                        print!("\tstr {}, [x0, {}]\n", emit_reg!(d), ofs);
-                        ofs += d.byte;
+                    for dr in data {
+                        print!("\tstr {}, [x0, {}]\n", emit_reg!(dr), ofs);
+                        ofs += dr.byte;
                     }
                     print!("\tmov x{}, x0\n", r.rm);
                     print!("\tldr x0, [sp, 8]\n");
                     print!("\tadd sp, sp #8\n");    
                 }
-                Read(r, ofs) => {
-                    print!("\tldr x{}, [{}, {}]\n", r.rm, emit_reg!(r), ofs);
+                Read(mut r, (ofs, byte)) => {
+                    assert_eq!(r.byte, 8);
+                    let wxr = if byte == 4 { r.byte = 4; "w" } else if byte == 8 { r.byte = 8; "x" } else { "panic_reg" };
+                    print!("\tldr {}{}, [x{}, {}]\n", wxr, r.rm, r.rm, ofs);
                 }
                 Begin(..) | End(..) | Kill(..) | Dummy => {}
             }
         }
         if decl.haveapp {
             print!("\tldp x29, x30, [sp], {}\n", spofs);
+        } else {
+            print!("\tadd sp, sp, #{}\n", spofs);
         }
         print!("\tret\n");
     }

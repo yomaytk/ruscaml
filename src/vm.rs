@@ -4,9 +4,9 @@ use regalloc::REG_SIZE;
 
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
 
 pub type Ofs = i32;
+pub type Byte = i32;
 type Label = String;
 
 macro_rules! print_reg {
@@ -21,23 +21,22 @@ macro_rules! reg_byte {
     };
 }
 
-pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(1) });
+pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
 pub static FRESH_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
 pub static LOOP_INFO: Lazy<Mutex<Vec<(Label, i32)>>> = Lazy::new(|| { Mutex::new(vec![]) });
 pub static REG_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0)} );
 pub static HAVE_APP: Lazy<Mutex<bool>> = Lazy::new(|| { Mutex::new(false)} );
-pub static MALLOC_INFO: Lazy<Mutex<HashMap<String, Vec<i32>>>> = Lazy::new(|| { Mutex::new(HashMap::new()) });
 
 fn next_stack32() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
     *STACK_POS.lock().unwrap() = pos+1;
-    pos
+    pos+1
 }
 
 fn next_stack64() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
     *STACK_POS.lock().unwrap() = pos+2;
-    pos
+    pos+2
 }
 
 fn next_label() -> Label {
@@ -64,11 +63,6 @@ fn next_regnum() -> i32 {
     let nreg = *REG_NUM.lock().unwrap();
     *REG_NUM.lock().unwrap() = nreg+1;
     nreg
-}
-
-fn malloc_info_dummy() -> Option<Vec<i32>> {
-    let res = (*MALLOC_INFO).lock().unwrap().remove("dummy");
-    res
 }
 
 #[derive(Clone, Debug)]
@@ -199,7 +193,7 @@ pub enum Instr {
     Call(Reg, Vec<Reg>),
     Ret(Reg, Reg),
     Malloc(Reg, Vec<Reg>),
-    Read(Reg, i32),
+    Read(Reg, (Ofs, Byte)),
     Begin(Label),
     End(Label),
     Kill(Reg),
@@ -273,8 +267,8 @@ impl Instr {
                     print!(",");
                 }
             }
-            Read(r, ofs) => {
-                print!("read r{} <- #{}( r{} )\n", print_reg!(r, real), ofs, print_reg!(r, real));
+            Read(r, (ofs, byte)) => {
+                print!("read r{} <- #{}~{}( r{} )\n", print_reg!(r, real), ofs, byte, print_reg!(r, real));
             }
             Kill(r) => {
                 print!("kill r{}\n", print_reg!(r, real));
@@ -285,20 +279,20 @@ impl Instr {
     }
 }
 
-fn trans_value(fval: flat::Value, env: &Env<String, (Ofs, i32)>) -> Operand {
+fn trans_value(fval: flat::Value, varenv: &Env<String, (Ofs, Byte)>) -> Operand {
     use flat::Value::*;
     match fval {
         Var(id) => { 
-            let (ofs, b4) = env.find(&id);
-            Operand::Local(ofs, b4)
+            let (ofs, b4) = varenv.find(&id).unwrap();
+            Operand::Local(*ofs, *b4)
         }
         Fun(id) => { Operand::Proc(id) }
         Intv(v) => { Operand::Intv(v) }
     }
 }
 
-fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, (Ofs, i32)>) -> Reg {
-    let op = trans_value(val, env);
+fn value2reg(decl: &mut Decl, val: flat::Value, varenv: &Env<String, (Ofs, Byte)>) -> Reg {
+    let op = trans_value(val, varenv);
     use Operand::*;
     match op {
         Local(ofs, byte) => {
@@ -312,7 +306,7 @@ fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, (Ofs, i32)>) -
             r
         }
         Proc(id) => {
-            let r = Reg::new(4);
+            let r = Reg::new(8);
             decl.addinstr(Instr::Loadf(r, id));
             r
         }
@@ -322,15 +316,15 @@ fn value2reg(decl: &mut Decl, val: flat::Value, env: &Env<String, (Ofs, i32)>) -
     }
 }
 
-fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, (Ofs, i32)>) -> Reg {
+fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, varenv: &mut Env<String, (Ofs, Byte)>, mallocenv: &mut Env<String, Vec<Byte>>) -> Reg {
     use flat::Cexp::*;
     match fcexp {
         Val(val) => {
-            value2reg(decl, val, env)
+            value2reg(decl, val, varenv)
         }
         Binop(btype, val1, val2) => {
-            let r1 = value2reg(decl, val1, env);
-            let r2 = value2reg(decl, val2, env);
+            let r1 = value2reg(decl, val1, varenv);
+            let r2 = value2reg(decl, val2, varenv);
             decl.addinstr(Instr::Binop(btype, r1, r2));
             decl.addinstr(Instr::Kill(r2));
             r1
@@ -338,10 +332,10 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, (Ofs, i3
         App(val, vals) => {
             let mut args = vec![];
             for val in vals {
-                let r = value2reg(decl, val, env);
+                let r = value2reg(decl, val, varenv);
                 args.push(r);
             }
-            let r1 = value2reg(decl, val, env);
+            let r1 = value2reg(decl, val, varenv);
             decl.addinstr(Instr::Call(r1, args.clone()));
             for arg in args {
                 decl.addinstr(Instr::Kill(arg));
@@ -352,29 +346,28 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, (Ofs, i3
         If(val, fexp1, fexp2) => {
             let t_e1 = next_label();
             let t_e2 = next_label();
-            let r1 = value2reg(decl, val, env);
+            let r1 = value2reg(decl, val, varenv);
             decl.addinstr(Instr::Br(r1, t_e1.clone()));
-            env.inc();
-            let r2 = trans_exp(*fexp2, decl, env);
+            varenv.inc();
+            let r2 = trans_exp(*fexp2, decl, varenv, mallocenv);
             decl.addinstr(Instr::Mover(r1, r2));
             decl.addinstr(Instr::Kill(r2));
             decl.addinstr(Instr::Gt(t_e2.clone()));
-            env.dec();
+            varenv.dec();
             decl.addinstr(Instr::Label(t_e1.clone()));
-            env.inc();
-            let r3 = trans_exp(*fexp1, decl, env);
+            varenv.inc();
+            let r3 = trans_exp(*fexp1, decl, varenv, mallocenv);
             decl.addinstr(Instr::Mover(r1, r3));
             decl.addinstr(Instr::Kill(r3));
             decl.addinstr(Instr::Label(t_e2.clone()));
-            env.dec();
+            varenv.dec();
             r1
         }
-        Tuple(vals) => {
+        Tuple(vals) => {    
             let mut data = vec![];
             let mut bsizes = vec![];
             for val in vals {
-                let mut r = value2reg(decl, val, env);
-                r.byte = 8;
+                let r = value2reg(decl, val, varenv);
                 bsizes.push(r.byte);
                 data.push(r);
             }
@@ -383,49 +376,107 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, env: &mut Env<String, (Ofs, i3
             for d in data {
                 decl.addinstr(Instr::Kill(d));
             }
-            // assert!(!(*MALLOC_INFO).lock().unwrap().contains_key("dummy"));
-            (*MALLOC_INFO).lock().unwrap().insert(String::from("dummy"), bsizes);
+            assert!(mallocenv.is_dummy());
+            mallocenv.addval(String::from("$$$dummy"), bsizes);
             r1
         }
         Proj(val, c) => {
-            let r = value2reg(decl, val, env);
-            decl.addinstr(Instr::Read(r, c));
+            let mut ofs = 0;
+            let byte;
+            if let flat::Value::Var(id) = &val {
+                let bytelist = mallocenv.find(id).unwrap();
+                for i in 0..c {
+                    ofs += bytelist[i as usize];
+                }
+                byte = bytelist[c as usize];
+            } else {
+                message_error(&format!("{:?} should be flat::Value::Var", val));
+                panic!("Error");
+            }
+            let mut r = value2reg(decl, val, varenv);
+            r.byte = byte;
+            decl.addinstr(Instr::Read(r, (ofs, byte)));
             r
         }
     }
 }
 
-fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, (Ofs, i32)>) -> Reg {
+fn trans_exp(fexp: flat::Exp, decl: &mut Decl, varenv: &mut Env<String, (Ofs, i32)>, mallocenv: &mut Env<String, Vec<i32>>) -> Reg {
     use flat::Exp::*;
     match fexp {
         Compexp(fcexp) => {
-            trans_cexp(*fcexp, decl, env)
+            trans_cexp(*fcexp, decl, varenv, mallocenv)
         }
         Let(id, fcexp, fexp) => {
-            let r1 = trans_cexp(*fcexp, decl, env);
-            let ofs = reg_byte!(r1);
-            if let Some(bsizes) = malloc_info_dummy() {
-                (*MALLOC_INFO).lock().unwrap().insert(id.clone(), bsizes);
+            use flat::Cexp::*;
+            let r1;
+            match *fcexp {
+                // let id = (a, b, ...)
+                Tuple(bs) => {
+                    r1 = trans_cexp(Tuple(bs), decl, varenv, mallocenv);
+                    let bytelist = mallocenv.find(&String::from("$$$dummy")).unwrap().clone();
+                    assert_ne!(bytelist, vec![-100]);
+                    mallocenv.addval(id.clone(), bytelist);
+                }
+                // let id1 = id2 ...
+                Val(flat::Value::Var(id)) => {
+                    r1 = trans_cexp(Val(flat::Value::Var(id.clone())), decl, varenv, mallocenv);
+                    let mut bytelist = vec![];
+                    if let Some(bs) = mallocenv.find(&id) {
+                        bytelist = bs.clone();
+                    }
+                    if !bytelist.is_empty() {
+                        mallocenv.addval(id, bytelist);
+                    }
+                }
+                _ => {
+                    r1 = trans_cexp(*fcexp, decl, varenv, mallocenv);
+                }
             }
+            let ofs = reg_byte!(r1);
             decl.addinstr(Instr::Store(ofs, r1));
             decl.addinstr(Instr::Kill(r1));
-            env.addval(id, (ofs, r1.byte));
-            trans_exp(*fexp, decl, env)
+            varenv.addval(id, (ofs, r1.byte));
+            trans_exp(*fexp, decl, varenv, mallocenv)
         }
         Loop(id, fcexp, fexp) => {
+            use flat::Cexp::*;
             let loop_l = next_label();
             decl.addinstr(Instr::Label(loop_l.clone()));
-            let r1 = trans_cexp(*fcexp, decl, env);
+            let r1;
+            match *fcexp {
+                // let id = (a, b, ...)
+                Tuple(bs) => {
+                    r1 = trans_cexp(Tuple(bs), decl, varenv, mallocenv);
+                    let bytelist = mallocenv.find(&String::from("$$$dummy")).unwrap().clone();
+                    assert_ne!(bytelist, vec![-100]);
+                    mallocenv.addval(id.clone(), bytelist.clone());
+                }
+                // let id1 = id2 ...
+                Val(flat::Value::Var(id)) => {
+                    r1 = trans_cexp(Val(flat::Value::Var(id.clone())), decl, varenv, mallocenv);
+                    let mut bytelist = vec![];
+                    if let Some(bs) = mallocenv.find(&id) {
+                        bytelist = bs.clone();
+                    }
+                    if !bytelist.is_empty() {
+                        mallocenv.addval(id, bytelist);
+                    }
+                }
+                _ => {
+                    r1 = trans_cexp(*fcexp, decl, varenv, mallocenv);
+                }
+            }
             let id_ofs = reg_byte!(r1);
             add_loopinfo(loop_l, id_ofs);
             decl.addinstr(Instr::Store(id_ofs, r1));
             decl.addinstr(Instr::Kill(r1));
-            env.addval(id, (id_ofs, r1.byte));
-            trans_exp(*fexp, decl, env)
+            varenv.addval(id, (id_ofs, r1.byte));
+            trans_exp(*fexp, decl, varenv, mallocenv)
         }
         Recur(val) => {
             let (loop_l, loop_ofs) = get_loopinfo();
-            let r1 = trans_cexp(flat::Cexp::Val(val), decl, env);
+            let r1 = trans_cexp(flat::Cexp::Val(val), decl, varenv, mallocenv);
             decl.addinstr(Instr::Store(loop_ofs, r1));
             decl.addinstr(Instr::Gt(loop_l));
             r1
@@ -434,21 +485,22 @@ fn trans_exp(fexp: flat::Exp, decl: &mut Decl, env: &mut Env<String, (Ofs, i32)>
 }
 
 pub fn trans_pg(pg: flat::Program) -> Program {
-    let mut env = Env::new();
+    let mut varenv = Env::new();
+    let mut mallocenv = Env::new();
     let mut program = Program::new();
     for flat::Recdecl(funame, args, body) in pg.recs {
         let mut decl = Decl::new(funame, 0, vec![], false);
-        env.inc();
+        varenv.inc();
         let mut pari = 0;
         for arg in args {
             let ofs = next_stack64();
             decl.addinstr(Instr::Argst(ofs, Operand::Param(pari)));
-            env.addval(arg, (ofs, 8));
+            varenv.addval(arg, (ofs, 8));
             pari += 1;
         }
-        let r1 = trans_exp(*body, &mut decl, &mut env);
-        env.dec();
-        decl.vc = *STACK_POS.lock().unwrap()-1;
+        let r1 = trans_exp(*body, &mut decl, &mut varenv, &mut mallocenv);
+        varenv.dec();
+        decl.vc = *STACK_POS.lock().unwrap();
         let mut ra1 = Reg::new(4);
         ra1.byte = r1.byte;
         decl.addinstr(Instr::Ret(ra1, r1));

@@ -2,10 +2,10 @@ EXPECT(1+3;; => 4):
 EXPECT(1 + 3 * 4 + 5;; => 18):
 EXPECT(if 1 then 4 else 6;; => 4):
 EXPECT(let x = 3 in (x + 1) * 2 + (3 + 1);; => 12):
+EXPECT(let f = fun x -> fun y -> fun z -> x+y+z in f 1 2 3;; => 6):
 EXPECT(let a = 1 in let b = 3 in a+b*3;; => 10):
 EXPECT(let rec f = fun a -> a+4 in 5;; => 5):
 EXPECT(loop l = let a = 32 in a in 43+6;; => 49):
-EXPECT(let f = fun x -> fun y -> fun z -> x+y+z in f 1 2 3;; => 6):
 EXPECT(let f = fun x -> fun y -> x+y in let a = 3 in let b = 4 in f a b;; => 7):
 EXPECT(let a = (0, (1, (2, (3, 4)))) in a.2.2.2.1;; => 3):
 EXPECT(let a = 1 in

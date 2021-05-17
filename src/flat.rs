@@ -70,14 +70,14 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn nval2fval(nval: NV, valf: bool) -> Value {
+    pub fn nval2fval(nval: &NV, valf: bool) -> Value {
         use normal::Value::*;
         match nval {
             Var(s) => {
-                if valf { Value::Var(s) }
-                else { Value::Fun(s) }
+                if valf { Value::Var(s.clone()) }
+                else { Value::Fun(s.clone()) }
             }
-            Intv(v) => { Value::Intv(v) }
+            Intv(v) => { Value::Intv(*v) }
         }
     }
 }
@@ -176,24 +176,24 @@ impl Exp {
 fn cce2fce(ccexp: closure::Cexp, env: &Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
-        Val(val) => { Cexp::Val(env.find(&val)) }
-        Binop(btype, val1, val2) => { Cexp::Binop(btype, env.find(&val1), env.find(&val2)) }
+        Val(val) => { Cexp::Val(env.efind(&val)) }
+        Binop(btype, val1, val2) => { Cexp::Binop(btype, env.efind(&val1), env.efind(&val2)) }
         App(val1, vals) => {
             let mut fvals = vec![];
             for val in vals {
-                fvals.push(env.find(&val));
+                fvals.push(env.efind(&val));
             }
-            Cexp::App(env.find(&val1), fvals)
+            Cexp::App(env.efind(&val1), fvals)
         }
         Tuple(vals) => {
             let mut fvals = vec![];
             for val in vals {
-                fvals.push(env.find(&val));
+                fvals.push(env.efind(&val));
             }
             Cexp::Tuple(fvals)
         }
         Proj(val, c) => {
-            Cexp::Proj(env.find(&val), c)
+            Cexp::Proj(env.efind(&val), c)
         }
         If(..) => {
             panic!("cce2fce error.")
@@ -205,7 +205,7 @@ fn sub_flatten(ccexp: closure::Cexp, env: &mut Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
         If(val, clexp1, clexp2) => {
-            Cexp::If(env.find(&val), Box::new(flatten(*clexp1, env)), Box::new(flatten(*clexp2, env)))
+            Cexp::If(env.efind(&val), Box::new(flatten(*clexp1, env)), Box::new(flatten(*clexp2, env)))
         }
         _ => {
             cce2fce(ccexp, env)
@@ -223,29 +223,37 @@ fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
             env.inc();
             let fcexp = sub_flatten(*ccexp, env);
             env.dec();
-            env.addval(NV::Var(id.clone()), true);
+            let nvalue = NV::Var(id.clone());
+            let value = Value::nval2fval(&nvalue, true);
+            env.addval(nvalue, value);
             Exp::Let(id, Box::new(fcexp), Box::new(flatten(*clexp, env)))
         }
         Loop(id, ccexp, clexp) => {
             env.inc();
             let fcexp = sub_flatten(*ccexp, env);
             env.dec();
-            env.addval(NV::Var(id.clone()), true);
+            let nvalue = NV::Var(id.clone());
+            let value = Value::nval2fval(&nvalue, true);
+            env.addval(nvalue, value);
             Exp::Loop(id, Box::new(fcexp), Box::new(flatten(*clexp, env)))
         }
         Letrec(id1, args, clexp1, clexp2) => {
             env.inc();
             for arg in &args {
-                env.addval(NV::Var(arg.clone()), true);
+                let nvalue = NV::Var(arg.clone());
+                let value = Value::nval2fval(&nvalue, true);
+                env.addval(nvalue, value);
             }
             let fclexp1 = flatten(*clexp1, env);
             env.dec();
             PROG.lock().unwrap().add(Recdecl::new(id1.clone(), args, fclexp1));
-            env.addval(NV::Var(id1), false);
+            let nvalue = NV::Var(id1);
+            let value = Value::nval2fval(&nvalue, false);
+            env.addval(nvalue, value);
             flatten(*clexp2, env)
         }
         Recur(val) => {
-            Exp::Recur(env.find(&val))
+            Exp::Recur(env.efind(&val))
         }
     }
 }
@@ -253,6 +261,6 @@ fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
 pub fn flat(clexp: closure::Exp) -> Program {
     let mut env = Env::new();
     let toplevel = flatten(clexp, &mut env);
-    PROG.lock().unwrap().add(Recdecl::new(String::from("main"), vec![], toplevel));
+    PROG.lock().unwrap().add(Recdecl::new(String::from("_toplevel"), vec![], toplevel));
     std::mem::replace(&mut PROG.lock().unwrap(), Program::new())
 }

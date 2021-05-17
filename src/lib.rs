@@ -57,18 +57,13 @@ pub fn message_error(message: &str) {
     println!("Error: {}", message);
 }
 
-trait Environment<T, V, U> {
-    fn find(&self, key : &T) -> V;
-    fn addval(&mut self, key: T, _: U);
-}
-
 #[derive(Debug, Clone)]
 struct Env<T, V> {
     vals: HashMap<T, V>,
     prev: Option<Box<Env<T, V>>>
 }
 
-impl<T, V> Env<T, V> {
+impl<T: std::cmp::Eq + std::hash::Hash + std::fmt::Debug, V: std::fmt::Debug> Env<T, V> {
     fn new() -> Self {
         Self {
             vals: HashMap::new(),
@@ -86,45 +81,40 @@ impl<T, V> Env<T, V> {
         let env = std::mem::replace(&mut (*self).prev, None);
         *self = *env.unwrap()
     }
+    fn addval(&mut self, key: T, value: V) {
+        self.vals.insert(key, value);
+    }
+    fn find(&self, key: &T) -> Option<&V> {
+        let mut nenv = self;
+        loop {
+            if let Some(value) = nenv.vals.get(key) {
+                return Some(value);
+            } else {
+                match nenv.prev {
+                    None => { message_error(&format!(" {:?} is not defined. ", key)); panic!("{:?}", &self); return None; }
+                    Some(ref next_env) => { nenv = next_env; }
+                }
+            }
+        }
+    }
 }
 
-impl Environment<NV, FV, bool> for Env<NV, FV> {
-    fn find(&self, key: &NV) -> FV {
+impl Env<NV, FV> {
+    fn efind(&self, key: &NV) -> FV {
         if let normal::Value::Intv(v) = key {
             return FV::Intv(*v);
         }
-        let mut nenv = self;
-        loop {
-            if let Some(value) = nenv.vals.get(key) {
-                return value.clone()
-            } else {
-                match nenv.prev {
-                    None => { panic!("cannot find variable from Env. : {:?}, variable: {:?}", self, key); }
-                    Some(ref next_env) => { nenv = next_env; }
-                }
-            }
-        }
-    }
-    fn addval(&mut self, key: NV, tf: bool) {
-        self.vals.insert(key.clone(), FV::nval2fval(key, tf));
+        self.find(key).unwrap().clone()
     }
 }
 
-impl Environment<String, (vm::Ofs, i32), (vm::Ofs, i32)> for Env<String, (vm::Ofs, i32)> {
-    fn find(&self, key: &String) -> (vm::Ofs, i32) {
-        let mut nenv = self;
-        loop {
-            if let Some(value) = nenv.vals.get(key) {
-                return *value;
-            } else {
-                match nenv.prev {
-                    None => { panic!(" {} is not defined. ", key); }
-                    Some(ref next_env) => { nenv = next_env; }
-                }
-            }
+impl Env<String, Vec<vm::Byte>> {
+    fn is_dummy(&self) -> bool {
+        let dm = self.find(&String::from("$$$dummy")).unwrap();
+        if dm.len() == 1 && dm[0] == -100 {
+            return true;
+        } else {
+            panic!(" $$$dummy is not defined. ")
         }
-    }
-    fn addval(&mut self, key: String, value: (vm::Ofs, i32)) {
-        self.vals.insert(key, value);
     }
 }
