@@ -1,7 +1,7 @@
 # ruscaml
 ## Overview
 
-ruscaml is a tiny Mincaml compiler by Rust (but in the process of creation). This compiler can interpret the some basic syntax of miniml. (See the test/test.ml directory for details.)
+ruscaml is a tiny Mincaml compiler by Rust. This compiler can interpret the some basic syntax of Mincaml.
 <br>
 <br>
 ruscaml has some stages, and here is an overview of the internals.
