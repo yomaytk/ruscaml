@@ -1,9 +1,9 @@
-use super::*;
 use super::normal::Bintype;
+use super::*;
 use regalloc::REG_SIZE;
 
-use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 pub type Ofs = i32;
 pub type Byte = i32;
@@ -11,37 +11,46 @@ type Label = String;
 
 macro_rules! print_reg {
     ($r: ident, $real: expr) => {
-        if $real { $r.rm } else { $r.vm }
+        if $real {
+            $r.rm
+        } else {
+            $r.vm
+        }
     };
 }
 
 macro_rules! reg_byte {
     ($r: ident) => {
-        if $r.byte == 4 { next_stack32() } else { assert_eq!($r.byte, 8); next_stack64() }
+        if $r.byte == 4 {
+            next_stack32()
+        } else {
+            assert_eq!($r.byte, 8);
+            next_stack64()
+        }
     };
 }
 
-pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
-pub static FRESH_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0) });
-pub static LOOP_INFO: Lazy<Mutex<Vec<(Label, i32)>>> = Lazy::new(|| { Mutex::new(vec![]) });
-pub static REG_NUM: Lazy<Mutex<i32>> = Lazy::new(|| { Mutex::new(0)} );
-pub static HAVE_APP: Lazy<Mutex<bool>> = Lazy::new(|| { Mutex::new(false)} );
+pub static STACK_POS: Lazy<Mutex<i32>> = Lazy::new(|| Mutex::new(0));
+pub static FRESH_NUM: Lazy<Mutex<i32>> = Lazy::new(|| Mutex::new(0));
+pub static LOOP_INFO: Lazy<Mutex<Vec<(Label, i32)>>> = Lazy::new(|| Mutex::new(vec![]));
+pub static REG_NUM: Lazy<Mutex<i32>> = Lazy::new(|| Mutex::new(0));
+pub static HAVE_APP: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
 fn next_stack32() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
-    *STACK_POS.lock().unwrap() = pos+1;
-    pos+1
+    *STACK_POS.lock().unwrap() = pos + 1;
+    pos + 1
 }
 
 fn next_stack64() -> i32 {
     let pos = *STACK_POS.lock().unwrap();
-    *STACK_POS.lock().unwrap() = pos+2;
-    pos+2
+    *STACK_POS.lock().unwrap() = pos + 2;
+    pos + 2
 }
 
 fn next_label() -> Label {
     let fresh_num = *FRESH_NUM.lock().unwrap();
-    *FRESH_NUM.lock().unwrap() = fresh_num+1;
+    *FRESH_NUM.lock().unwrap() = fresh_num + 1;
     let mut s = Label::from(".L");
     s.push_str(&fresh_num.to_string());
     s
@@ -61,7 +70,7 @@ fn get_loopinfo() -> (Label, Ofs) {
 
 fn next_regnum() -> i32 {
     let nreg = *REG_NUM.lock().unwrap();
-    *REG_NUM.lock().unwrap() = nreg+1;
+    *REG_NUM.lock().unwrap() = nreg + 1;
     nreg
 }
 
@@ -72,9 +81,7 @@ pub struct Program {
 
 impl Program {
     fn new() -> Self {
-        Self {
-            decls: vec![],
-        }
+        Self { decls: vec![] }
     }
     fn add(&mut self, decl: Decl) {
         self.decls.push(decl);
@@ -87,7 +94,7 @@ impl Program {
 }
 
 #[derive(Clone, Debug)]
-pub struct Decl{
+pub struct Decl {
     pub funlb: Label,
     pub vc: i32,
     pub instrs: Vec<Instr>,
@@ -169,10 +176,18 @@ impl Operand {
     fn program_display(self) {
         use Operand::*;
         match self {
-            Param(c) => { print!(" param({})", c); }
-            Local(c, _) => { print!(" local({})", c); }
-            Proc(lb) => { print!(" labimm {}", lb); }
-            Intv(c) => { print!(" imm({})", c); }
+            Param(c) => {
+                print!(" param({})", c);
+            }
+            Local(c, _) => {
+                print!(" local({})", c);
+            }
+            Proc(lb) => {
+                print!(" labimm {}", lb);
+            }
+            Intv(c) => {
+                print!(" imm({})", c);
+            }
         }
     }
 }
@@ -228,13 +243,23 @@ impl Instr {
                 print!(" )\n");
             }
             Binop(btype, r1, r2) => {
-                print!(" r{} <- {}(r{}, r{})\n", print_reg!(r1, real), btype.bintype_signal(), print_reg!(r1, real), print_reg!(r2, real));
+                print!(
+                    " r{} <- {}(r{}, r{})\n",
+                    print_reg!(r1, real),
+                    btype.bintype_signal(),
+                    print_reg!(r1, real),
+                    print_reg!(r2, real)
+                );
             }
-            Label(lb) => { print!("{}:\n", lb) }
-            Br(r, lb) => { 
+            Label(lb) => {
+                print!("{}:\n", lb)
+            }
+            Br(r, lb) => {
                 print!(" if r{} then goto {}\n", print_reg!(r, real), lb);
             }
-            Gt(lb) => { print!(" goto {}\n", lb); }
+            Gt(lb) => {
+                print!(" goto {}\n", lb);
+            }
             Call(r, mut args) => {
                 print!(" r{} ", print_reg!(r, real));
                 args.reverse();
@@ -243,14 +268,14 @@ impl Instr {
                     if let Some(rx) = args.pop() {
                         print!(" r{}", print_reg!(rx, real));
                     }
-                    if args.is_empty() { 
+                    if args.is_empty() {
                         print!(" )\n");
-                        break; 
+                        break;
                     }
                     print!(",");
                 }
             }
-            Ret(r1, r2) => { 
+            Ret(r1, r2) => {
                 print!(" r{} <- r{}\n", print_reg!(r1, real), print_reg!(r2, real));
                 print!(" return(r{})\n", print_reg!(r1, real));
             }
@@ -260,7 +285,7 @@ impl Instr {
                     if let Some(rx) = datas.pop() {
                         print!(" r{}", rx.rm);
                     }
-                    if datas.is_empty(){
+                    if datas.is_empty() {
                         print!(" ]\n");
                         break;
                     }
@@ -268,12 +293,20 @@ impl Instr {
                 }
             }
             Read(r, (ofs, byte)) => {
-                print!("read r{} <- #{}~{}( r{} )\n", print_reg!(r, real), ofs, byte, print_reg!(r, real));
+                print!(
+                    "read r{} <- #{}~{}( r{} )\n",
+                    print_reg!(r, real),
+                    ofs,
+                    byte,
+                    print_reg!(r, real)
+                );
             }
             Kill(r) => {
                 print!("kill r{}\n", print_reg!(r, real));
             }
-            Begin(..) | End(..) => { print!(" Begin or End is unimplemented. "); }
+            Begin(..) | End(..) => {
+                print!(" Begin or End is unimplemented. ");
+            }
             Dummy => {}
         }
     }
@@ -282,12 +315,12 @@ impl Instr {
 fn trans_value(fval: flat::Value, varenv: &Env<String, (Ofs, Byte)>) -> Operand {
     use flat::Value::*;
     match fval {
-        Var(id) => { 
+        Var(id) => {
             let (ofs, b4) = varenv.find(&id).unwrap();
             Operand::Local(*ofs, *b4)
         }
-        Fun(id) => { Operand::Proc(id) }
-        Intv(v) => { Operand::Intv(v) }
+        Fun(id) => Operand::Proc(id),
+        Intv(v) => Operand::Intv(v),
     }
 }
 
@@ -316,12 +349,15 @@ fn value2reg(decl: &mut Decl, val: flat::Value, varenv: &Env<String, (Ofs, Byte)
     }
 }
 
-fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, varenv: &mut Env<String, (Ofs, Byte)>, mallocenv: &mut Env<String, Vec<Byte>>) -> Reg {
+fn trans_cexp(
+    fcexp: flat::Cexp,
+    decl: &mut Decl,
+    varenv: &mut Env<String, (Ofs, Byte)>,
+    mallocenv: &mut Env<String, Vec<Byte>>,
+) -> Reg {
     use flat::Cexp::*;
     match fcexp {
-        Val(val) => {
-            value2reg(decl, val, varenv)
-        }
+        Val(val) => value2reg(decl, val, varenv),
         Binop(btype, val1, val2) => {
             let r1 = value2reg(decl, val1, varenv);
             let r2 = value2reg(decl, val2, varenv);
@@ -363,7 +399,7 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, varenv: &mut Env<String, (Ofs,
             varenv.dec();
             r1
         }
-        Tuple(vals) => {    
+        Tuple(vals) => {
             let mut data = vec![];
             let mut bsizes = vec![];
             for val in vals {
@@ -401,12 +437,15 @@ fn trans_cexp(fcexp: flat::Cexp, decl: &mut Decl, varenv: &mut Env<String, (Ofs,
     }
 }
 
-fn trans_exp(fexp: flat::Exp, decl: &mut Decl, varenv: &mut Env<String, (Ofs, i32)>, mallocenv: &mut Env<String, Vec<i32>>) -> Reg {
+fn trans_exp(
+    fexp: flat::Exp,
+    decl: &mut Decl,
+    varenv: &mut Env<String, (Ofs, i32)>,
+    mallocenv: &mut Env<String, Vec<i32>>,
+) -> Reg {
     use flat::Exp::*;
     match fexp {
-        Compexp(fcexp) => {
-            trans_cexp(*fcexp, decl, varenv, mallocenv)
-        }
+        Compexp(fcexp) => trans_cexp(*fcexp, decl, varenv, mallocenv),
         Let(id, fcexp, fexp) => {
             use flat::Cexp::*;
             let r1;

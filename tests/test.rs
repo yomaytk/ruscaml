@@ -1,14 +1,12 @@
 #[cfg(test)]
-
 extern crate ruscaml;
 
 use std::fs;
-use std::io::{ Write, BufWriter};
+use std::io::{BufWriter, Write};
 use std::process::Command;
 
 #[test]
 fn unittest() -> Result<(), Box<dyn std::error::Error>> {
-    
     let mut programset = fs::read_to_string("./tests/test.ml").expect("failed to read test.ml.");
     programset = programset.replace(":\n", ":");
     let mut programs: Vec<&str> = programset.split(":").collect();
@@ -23,7 +21,7 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
             .args(&["./tests/onetest.ml"])
             .output()
             .expect("failed to execute unit test");
-        
+
         let test_stdout = output.stdout;
         let error_stdout = output.stderr;
 
@@ -55,24 +53,27 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
             .args(&["exe.o", "a.s", "-o", "a"])
             .output()
             .expect("");
-        
+
         if !arm64assemble.status.success() {
             let _ = Command::new("echo")
                 .arg("-e")
                 .arg(format!("\\e[31m FAILED ASSEMBLE\\e[m [{}]", program))
                 .output()
                 .expect("");
-            
+
             let failed_message = arm64assemble.stderr;
-            println!("assemble error: {}", std::str::from_utf8(&failed_message).unwrap());
+            println!(
+                "assemble error: {}",
+                std::str::from_utf8(&failed_message).unwrap()
+            );
             std::process::exit(1);
         }
 
         let qemu_exe = Command::new("qemu-aarch64")
             .args(&["-L", "/usr/aarch64-linux-gnu", "a"])
             .output()
-            .expect("");        
-        
+            .expect("");
+
         if !qemu_exe.status.success() {
             let _ = Command::new("echo")
                 .arg("-e")
@@ -84,10 +85,10 @@ fn unittest() -> Result<(), Box<dyn std::error::Error>> {
         println!("OK");
     }
 
-        let _ = Command::new("rm")
+    let _ = Command::new("rm")
         .args(&["./tests/onetest.ml", "a", "exe.o"])
         .output()
         .expect("failed to delete onetest.ml");
-        
+
     Ok(())
 }

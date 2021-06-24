@@ -1,5 +1,5 @@
-use super::*;
 use super::lexer::*;
+use super::*;
 
 #[derive(Clone, Debug)]
 pub enum Ast {
@@ -70,9 +70,7 @@ fn aexpr(tokenset: &mut TokenSet) -> Ast {
             tokenset.assert_ttype(TokenType::Rbrac);
             proj(tokenset, ast)
         }
-        _ => {
-            Ast::Nonaexpr
-        }
+        _ => Ast::Nonaexpr,
     }
 }
 
@@ -166,7 +164,7 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
                     tokenset.assert_ttype(TokenType::In);
                     let ast2 = expr(tokenset);
                     ast = Ast::Let(id, Box::new(ast1), Box::new(ast2))
-                } 
+                }
             }
         }
         TokenType::Loop => {
@@ -187,36 +185,43 @@ fn expr(tokenset: &mut TokenSet) -> Ast {
 
 fn recur_check(ast: Ast, endpos: bool) -> Ast {
     match ast {
-        Ast::Nonaexpr | Ast::ILit(_) | Ast::BLit(_) | Ast::Var(_) => {
-            ast
-        }
-        Ast::Binop(ttype, ast1, ast2) => {
-            Ast::Binop(ttype, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
-        }
-        Ast::If(ast1, ast2, ast3) => {
-            Ast::If(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)), Box::new(recur_check(*ast3, endpos)))
-        }
-        Ast::Fun(id, ast1) => {
-            Ast::Fun(id, Box::new(recur_check(*ast1, endpos)))
-        }
-        Ast::Let(id, ast1, ast2) => {
-            Ast::Let(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
-        }
-        Ast::Rec(id, funid, ast1, ast2) => {
-            Ast::Rec(id, funid, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
-        }
-        Ast::Loop(id, ast1, ast2) => {
-            Ast::Loop(id, Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, true)))
-        }
-        Ast::App(ast1, ast2) => {
-            Ast::App(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
-        }
-        Ast::Tuple(ast1, ast2) => {
-            Ast::Tuple(Box::new(recur_check(*ast1, endpos)), Box::new(recur_check(*ast2, endpos)))
-        }
-        Ast::Proj(ast1, v) => {
-            Ast::Proj(Box::new(recur_check(*ast1, endpos)), v)
-        }
+        Ast::Nonaexpr | Ast::ILit(_) | Ast::BLit(_) | Ast::Var(_) => ast,
+        Ast::Binop(ttype, ast1, ast2) => Ast::Binop(
+            ttype,
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+        ),
+        Ast::If(ast1, ast2, ast3) => Ast::If(
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+            Box::new(recur_check(*ast3, endpos)),
+        ),
+        Ast::Fun(id, ast1) => Ast::Fun(id, Box::new(recur_check(*ast1, endpos))),
+        Ast::Let(id, ast1, ast2) => Ast::Let(
+            id,
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+        ),
+        Ast::Rec(id, funid, ast1, ast2) => Ast::Rec(
+            id,
+            funid,
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+        ),
+        Ast::Loop(id, ast1, ast2) => Ast::Loop(
+            id,
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, true)),
+        ),
+        Ast::App(ast1, ast2) => Ast::App(
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+        ),
+        Ast::Tuple(ast1, ast2) => Ast::Tuple(
+            Box::new(recur_check(*ast1, endpos)),
+            Box::new(recur_check(*ast2, endpos)),
+        ),
+        Ast::Proj(ast1, v) => Ast::Proj(Box::new(recur_check(*ast1, endpos)), v),
         Ast::Recur(ast1) => {
             if !endpos {
                 message_error("<recur <exp>> should be at end position.");

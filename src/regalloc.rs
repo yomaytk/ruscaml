@@ -14,8 +14,7 @@ pub fn regalloc(pg: &mut vm::Program) {
                     r1.set_real(&mut regs);
                     r2.set_real(&mut regs);
                 }
-                Move(r, _) | Store(_, r) | Load(r, _) 
-                | Loadf(r, _) | Br(r, ..) | Read(r, ..) => {
+                Move(r, _) | Store(_, r) | Load(r, _) | Loadf(r, _) | Br(r, ..) | Read(r, ..) => {
                     r.set_real(&mut regs);
                 }
                 Malloc(r, args) => {
@@ -24,7 +23,7 @@ pub fn regalloc(pg: &mut vm::Program) {
                         reg.set_real(&mut regs);
                     }
                 }
-                Call(r, args)=> {
+                Call(r, args) => {
                     r.set_real(&mut regs);
                     for reg in args {
                         reg.set_real(&mut regs);
@@ -35,7 +34,11 @@ pub fn regalloc(pg: &mut vm::Program) {
                     r2.set_real(&mut regs);
                 }
                 Argst(_, pari) => {
-                    let pri:i32 = if let Operand::Param(c) = pari { *c } else { 1000 };
+                    let pri: i32 = if let Operand::Param(c) = pari {
+                        *c
+                    } else {
+                        1000
+                    };
                     for i in 0..pri as usize {
                         regs[i] = 1;
                     }

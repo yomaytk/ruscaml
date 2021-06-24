@@ -4,14 +4,14 @@ use std::env;
 use std::fs;
 use std::sync::Mutex;
 
-pub mod lexer;
-pub mod parser;
-pub mod normal;
 pub mod closure;
-pub mod flat;
-pub mod vm;
-pub mod regalloc;
 pub mod codegen;
+pub mod flat;
+pub mod lexer;
+pub mod normal;
+pub mod parser;
+pub mod regalloc;
+pub mod vm;
 
 use lexer::*;
 
@@ -29,13 +29,13 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
     let mut end: usize = std::usize::MAX;
 
     for i in 0..std::usize::MAX {
-        if tokenset.pos - i == 0 || tokenset.tokens[tokenset.pos-i].position.0 == true {
+        if tokenset.pos - i == 0 || tokenset.tokens[tokenset.pos - i].position.0 == true {
             start = tokenset.tokens[tokenset.pos - i].position.2;
             break;
         }
     }
     for i in 0..std::usize::MAX {
-        if tokenset.pos + i == tokenset.tokens.len()-1 {
+        if tokenset.pos + i == tokenset.tokens.len() - 1 {
             end = (*PROGRAM).lock().unwrap().len();
             break;
         }
@@ -44,7 +44,10 @@ pub fn compile_error(tokenset: &TokenSet, message: &str) {
             break;
         }
     }
-    println!("Error: {} Line: {}.", message, tokenset.tokens[tokenset.pos].position.1);
+    println!(
+        "Error: {} Line: {}.",
+        message, tokenset.tokens[tokenset.pos].position.1
+    );
     println!("\t{}", &(*PROGRAM).lock().unwrap()[start..end]);
     print!("\t");
     for _ in 0..tokenset.tokens[tokenset.pos].position.2 - start {
@@ -60,21 +63,21 @@ pub fn message_error(message: &str) {
 #[derive(Debug, Clone)]
 struct Env<T, V> {
     vals: HashMap<T, V>,
-    prev: Option<Box<Env<T, V>>>
+    prev: Option<Box<Env<T, V>>>,
 }
 
 impl<T: std::cmp::Eq + std::hash::Hash + std::fmt::Debug, V: std::fmt::Debug> Env<T, V> {
     fn new() -> Self {
         Self {
             vals: HashMap::new(),
-            prev: None
+            prev: None,
         }
     }
     fn inc(&mut self) {
         let curenv = std::mem::replace(self, Env::new());
         *self = Self {
             vals: HashMap::new(),
-            prev: Some(Box::new(curenv))
+            prev: Some(Box::new(curenv)),
         }
     }
     fn dec(&mut self) {
@@ -91,8 +94,14 @@ impl<T: std::cmp::Eq + std::hash::Hash + std::fmt::Debug, V: std::fmt::Debug> En
                 return Some(value);
             } else {
                 match nenv.prev {
-                    None => { message_error(&format!(" {:?} is not defined. ", key)); panic!("{:?}", &self); return None; }
-                    Some(ref next_env) => { nenv = next_env; }
+                    None => {
+                        message_error(&format!(" {:?} is not defined. ", key));
+                        panic!("{:?}", &self);
+                        return None;
+                    }
+                    Some(ref next_env) => {
+                        nenv = next_env;
+                    }
                 }
             }
         }

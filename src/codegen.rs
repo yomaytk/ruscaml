@@ -1,17 +1,21 @@
-use super::*;
 use super::vm::*;
+use super::*;
 
 macro_rules! emit_reg {
     ($r: ident) => {
-        if $r.byte == 4 { format!("w{}", $r.rm) } else { format!("x{}", $r.rm) }
-    }
+        if $r.byte == 4 {
+            format!("w{}", $r.rm)
+        } else {
+            format!("x{}", $r.rm)
+        }
+    };
 }
 
 pub fn codegen(program: vm::Program) {
     print!(".text\n");
     print!("\t.global _toplevel\n");
     for decl in program.decls {
-        let mut spofs = 16 * ((decl.vc*4+15)/16);
+        let mut spofs = 16 * ((decl.vc * 4 + 15) / 16);
         print!("{}:\n", decl.funlb);
         if decl.haveapp {
             spofs += 16;
@@ -21,8 +25,8 @@ pub fn codegen(program: vm::Program) {
             print!("\tsub sp, sp, #{}\n", spofs);
         }
         for instr in decl.instrs {
-            use Instr::*;
             use normal::Bintype::*;
+            use Instr::*;
             match instr {
                 Move(r, op) => {
                     if let Operand::Intv(v) = op {
@@ -35,10 +39,10 @@ pub fn codegen(program: vm::Program) {
                     print!("\tmov {}, {}\n", emit_reg!(r1), emit_reg!(r2));
                 }
                 Store(ofs, r) => {
-                    print!("\tstr {}, [sp, {}]\n", emit_reg!(r), spofs-4*ofs);
+                    print!("\tstr {}, [sp, {}]\n", emit_reg!(r), spofs - 4 * ofs);
                 }
                 Load(r, ofs) => {
-                    print!("\tldr {}, [sp, {}]\n", emit_reg!(r), spofs-4*ofs);
+                    print!("\tldr {}, [sp, {}]\n", emit_reg!(r), spofs - 4 * ofs);
                 }
                 Loadf(r, id) => {
                     print!("\tadrp {}, {}\n", emit_reg!(r), id);
@@ -46,31 +50,39 @@ pub fn codegen(program: vm::Program) {
                 }
                 Argst(ofs, op) => {
                     if let Operand::Param(i) = op {
-                        print!("\tstr x{}, [sp, {}]\n", i, 4*ofs);
+                        print!("\tstr x{}, [sp, {}]\n", i, 4 * ofs);
                     } else {
                         panic!("codegen Argst error.");
                     }
                 }
-                Binop(btype, r1, r2) => {
-                    match btype {
-                        Plus => {
-                            print!("\tadd {}, {}, {}\n", emit_reg!(r1), emit_reg!(r1), emit_reg!(r2));
-                        }
-                        Mult => {
-                            print!("\tmul {}, {}, {}\n", emit_reg!(r1), emit_reg!(r1), emit_reg!(r2));
-                        }
-                        Lt => {
-                            print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
-                            print!("\tcset {}, lt\n", emit_reg!(r1));
-                            print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
-                        }
-                        Eq => {
-                            print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
-                            print!("\tcset {}, eq\n", emit_reg!(r1));
-                            print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
-                        }
+                Binop(btype, r1, r2) => match btype {
+                    Plus => {
+                        print!(
+                            "\tadd {}, {}, {}\n",
+                            emit_reg!(r1),
+                            emit_reg!(r1),
+                            emit_reg!(r2)
+                        );
                     }
-                }
+                    Mult => {
+                        print!(
+                            "\tmul {}, {}, {}\n",
+                            emit_reg!(r1),
+                            emit_reg!(r1),
+                            emit_reg!(r2)
+                        );
+                    }
+                    Lt => {
+                        print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
+                        print!("\tcset {}, lt\n", emit_reg!(r1));
+                        print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
+                    }
+                    Eq => {
+                        print!("\tcmp {}, {}\n", emit_reg!(r1), emit_reg!(r2));
+                        print!("\tcset {}, eq\n", emit_reg!(r1));
+                        print!("\tand {}, {}, 255\n", emit_reg!(r1), emit_reg!(r1));
+                    }
+                },
                 Label(lb) => {
                     print!("{}:\n", lb);
                 }
@@ -107,11 +119,19 @@ pub fn codegen(program: vm::Program) {
                     }
                     print!("\tmov x{}, x0\n", r.rm);
                     print!("\tldr x0, [sp, 8]\n");
-                    print!("\tadd sp, sp #8\n");    
+                    print!("\tadd sp, sp #8\n");
                 }
                 Read(mut r, (ofs, byte)) => {
                     assert_eq!(r.byte, 8);
-                    let wxr = if byte == 4 { r.byte = 4; "w" } else if byte == 8 { r.byte = 8; "x" } else { "panic_reg" };
+                    let wxr = if byte == 4 {
+                        r.byte = 4;
+                        "w"
+                    } else if byte == 8 {
+                        r.byte = 8;
+                        "x"
+                    } else {
+                        "panic_reg"
+                    };
                     print!("\tldr {}{}, [x{}, {}]\n", wxr, r.rm, r.rm, ofs);
                 }
                 Begin(..) | End(..) | Kill(..) | Dummy => {}

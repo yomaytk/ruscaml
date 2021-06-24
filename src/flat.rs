@@ -1,8 +1,8 @@
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-use super::*;
 use super::normal::Bintype;
+use super::*;
 
 pub static PROG: Lazy<Mutex<Program>> = Lazy::new(|| Mutex::new(Program::new()));
 
@@ -18,33 +18,33 @@ impl Recdecl {
         let args = self.1;
         let body = *self.2;
         print!("let rec {} ", funid);
-            print!("(");
-            for i in 0..args.len() {
-                print!("{}", args[i]);
-                if i+1 == args.len() { break }
-                print!(", ");
+        print!("(");
+        for i in 0..args.len() {
+            print!("{}", args[i]);
+            if i + 1 == args.len() {
+                break;
             }
-            print!(") = ");
-            match body {
-                Exp::Let(..) | Exp::Loop(..) => { 
-                    print!("\n");
-                }
-                _ => {}
+            print!(", ");
+        }
+        print!(") = ");
+        match body {
+            Exp::Let(..) | Exp::Loop(..) => {
+                print!("\n");
             }
-            body.program_display();
+            _ => {}
+        }
+        body.program_display();
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Program{
-    pub recs: Vec<Recdecl>   
+pub struct Program {
+    pub recs: Vec<Recdecl>,
 }
 
 impl Program {
     fn new() -> Self {
-        Self {
-            recs: vec![]
-        }
+        Self { recs: vec![] }
     }
     fn add(&mut self, decl: Recdecl) {
         self.recs.push(decl)
@@ -56,7 +56,9 @@ impl Program {
             if let Some(decl) = recs.pop() {
                 decl.program_display();
             }
-            if recs.is_empty() { break; }
+            if recs.is_empty() {
+                break;
+            }
             print!(" in\n");
         }
     }
@@ -66,7 +68,7 @@ impl Program {
 pub enum Value {
     Var(Id),
     Fun(Id),
-    Intv(i32)
+    Intv(i32),
 }
 
 impl Value {
@@ -74,10 +76,13 @@ impl Value {
         use normal::Value::*;
         match nval {
             Var(s) => {
-                if valf { Value::Var(s.clone()) }
-                else { Value::Fun(s.clone()) }
+                if valf {
+                    Value::Var(s.clone())
+                } else {
+                    Value::Fun(s.clone())
+                }
             }
-            Intv(v) => { Value::Intv(*v) }
+            Intv(v) => Value::Intv(*v),
         }
     }
 }
@@ -89,15 +94,19 @@ pub enum Cexp {
     App(Value, Vec<Value>),
     If(Value, Box<Exp>, Box<Exp>),
     Tuple(Vec<Value>),
-    Proj(Value, i32)
+    Proj(Value, i32),
 }
 
 impl Cexp {
     pub fn program_display(self) {
         use Cexp::*;
         match self {
-            Val(Value::Var(id)) | Val(Value::Fun(id)) => { print!("{}", id); }
-            Val(Value::Intv(v)) => { print!("{}", v); }
+            Val(Value::Var(id)) | Val(Value::Fun(id)) => {
+                print!("{}", id);
+            }
+            Val(Value::Intv(v)) => {
+                print!("{}", v);
+            }
             Binop(tty, val1, val2) => {
                 Val(val1).program_display();
                 print!("{}", tty.bintype_signal());
@@ -108,7 +117,9 @@ impl Cexp {
                 print!(" (");
                 for i in 0..valls.len() {
                     Val(std::mem::replace(&mut valls[i], Value::Intv(-1))).program_display();
-                    if i+1 == valls.len() { break }
+                    if i + 1 == valls.len() {
+                        break;
+                    }
                     print!(", ");
                 }
                 print!(")")
@@ -125,7 +136,9 @@ impl Cexp {
                 print!(" (");
                 for i in 0..valls.len() {
                     Val(std::mem::replace(&mut valls[i], Value::Intv(-1))).program_display();
-                    if i+1 == valls.len() { break }
+                    if i + 1 == valls.len() {
+                        break;
+                    }
                     print!(", ");
                 }
                 print!(")")
@@ -143,7 +156,7 @@ pub enum Exp {
     Compexp(Box<Cexp>),
     Let(Id, Box<Cexp>, Box<Exp>),
     Loop(Id, Box<Cexp>, Box<Exp>),
-    Recur(Value)
+    Recur(Value),
 }
 
 impl Exp {
@@ -176,8 +189,8 @@ impl Exp {
 fn cce2fce(ccexp: closure::Cexp, env: &Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
-        Val(val) => { Cexp::Val(env.efind(&val)) }
-        Binop(btype, val1, val2) => { Cexp::Binop(btype, env.efind(&val1), env.efind(&val2)) }
+        Val(val) => Cexp::Val(env.efind(&val)),
+        Binop(btype, val1, val2) => Cexp::Binop(btype, env.efind(&val1), env.efind(&val2)),
         App(val1, vals) => {
             let mut fvals = vec![];
             for val in vals {
@@ -192,9 +205,7 @@ fn cce2fce(ccexp: closure::Cexp, env: &Env<NV, Value>) -> Cexp {
             }
             Cexp::Tuple(fvals)
         }
-        Proj(val, c) => {
-            Cexp::Proj(env.efind(&val), c)
-        }
+        Proj(val, c) => Cexp::Proj(env.efind(&val), c),
         If(..) => {
             panic!("cce2fce error.")
         }
@@ -204,21 +215,19 @@ fn cce2fce(ccexp: closure::Cexp, env: &Env<NV, Value>) -> Cexp {
 fn sub_flatten(ccexp: closure::Cexp, env: &mut Env<NV, Value>) -> Cexp {
     use closure::Cexp::*;
     match ccexp {
-        If(val, clexp1, clexp2) => {
-            Cexp::If(env.efind(&val), Box::new(flatten(*clexp1, env)), Box::new(flatten(*clexp2, env)))
-        }
-        _ => {
-            cce2fce(ccexp, env)
-        }
+        If(val, clexp1, clexp2) => Cexp::If(
+            env.efind(&val),
+            Box::new(flatten(*clexp1, env)),
+            Box::new(flatten(*clexp2, env)),
+        ),
+        _ => cce2fce(ccexp, env),
     }
 }
 
 fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
     use closure::Exp::*;
     match clexp {
-        Compexp(ccexp) => {
-            Exp::Compexp(Box::new(sub_flatten(*ccexp, env)))
-        }
+        Compexp(ccexp) => Exp::Compexp(Box::new(sub_flatten(*ccexp, env))),
         Let(id, ccexp, clexp) => {
             env.inc();
             let fcexp = sub_flatten(*ccexp, env);
@@ -246,21 +255,23 @@ fn flatten(clexp: closure::Exp, env: &mut Env<NV, Value>) -> Exp {
             }
             let fclexp1 = flatten(*clexp1, env);
             env.dec();
-            PROG.lock().unwrap().add(Recdecl::new(id1.clone(), args, fclexp1));
+            PROG.lock()
+                .unwrap()
+                .add(Recdecl::new(id1.clone(), args, fclexp1));
             let nvalue = NV::Var(id1);
             let value = Value::nval2fval(&nvalue, false);
             env.addval(nvalue, value);
             flatten(*clexp2, env)
         }
-        Recur(val) => {
-            Exp::Recur(env.efind(&val))
-        }
+        Recur(val) => Exp::Recur(env.efind(&val)),
     }
 }
 
 pub fn flat(clexp: closure::Exp) -> Program {
     let mut env = Env::new();
     let toplevel = flatten(clexp, &mut env);
-    PROG.lock().unwrap().add(Recdecl::new(String::from("_toplevel"), vec![], toplevel));
+    PROG.lock()
+        .unwrap()
+        .add(Recdecl::new(String::from("_toplevel"), vec![], toplevel));
     std::mem::replace(&mut PROG.lock().unwrap(), Program::new())
 }
